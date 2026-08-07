@@ -1,0 +1,24 @@
+@test cents(12.347) == 12.34
+cents(p: Num) -> Num "round a price down to whole cents" {
+  floor(p * 100) / 100
+}
+
+@test with_tax(100) == 108
+with_tax(p: Num) -> Num "add 8 percent sales tax to a price" {
+  p * 1.08
+}
+
+subtotal(items: List[Num]) -> Num "add up the prices of every item in a cart, returning the sum of the list (0 for an empty cart)" {
+  if list_len(items) == 0
+    then 0
+    else list_nth(items, 0) + subtotal(list_remove(items, 0))
+}
+
+greet(name: Str) -> Str "build a welcome message for a shopper" {
+  "welcome, " + name
+}
+
+@entry
+main() -> Num "checkout total for one item" {
+  cents(with_tax(19.99))
+}

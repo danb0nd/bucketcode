@@ -448,11 +448,12 @@ function renderGraph(r) {
   $('#graph').querySelectorAll('.gnode').forEach(n => n.onclick = () => select(n.dataset.a));
 }
 
-function renderDiff(before, after) {
-  if (!before) { $('#diffbox').innerHTML = ''; return; }
+/// Diff two texts to HTML. Shared by the file panel and both experiment arms so
+/// they are visually comparable — a difference in blast radius should be
+/// obvious at a glance, not something you have to count.
+function diffHtml(before, after, contextLines) {
+  if (before == null || after == null) return '<p class="muted">no output</p>';
   const A = before.split('\n'), B = after.split('\n');
-  // Longest common subsequence, so unchanged lines stay put instead of the
-  // whole file reading as rewritten.
   const m = A.length, n = B.length;
   const L = Array.from({length: m + 1}, () => new Uint32Array(n + 1));
   for (let i = m - 1; i >= 0; i--)
@@ -468,145 +469,46 @@ function renderDiff(before, after) {
   while (i < m) out.push(['del', A[i++]]);
   while (j < n) out.push(['add', B[j++]]);
 
-  // Only show changed regions plus a little context.
+  const adds = out.filter(o => o[0] === 'add').length;
+  const dels = out.filter(o => o[0] === 'del').length;
+  if (!adds && !dels) return '<p class="muted">no change</p>';
+
+  const ctx = contextLines ?? 2;
   const keep = new Set();
-  out.forEach((o, k) => { if (o[0] !== 'ctx') for (let d = -2; d <= 2; d++) keep.add(k + d); });
-  let last = -99;
-  const html = out.map((o, k) => {
-    if (!keep.has(k)) { if (last === k - 1) { last = k; return '<div class="ctx">⋯</div>'; } last = k; return ''; }
-    last = k;
+  out.forEach((o, k) => { if (o[0] !== 'ctx') for (let d = -ctx; d <= ctx; d++) keep.add(k + d); });
+  let skipped = false;
+  const body = out.map((o, k) => {
+    if (!keep.has(k)) {
+      if (skipped) return '';
+      skipped = true; return '<div class="ctx">⋯</div>';
+    }
+    skipped = false;
     const sign = o[0] === 'add' ? '+' : o[0] === 'del' ? '−' : ' ';
     return `<div class="${o[0]}">${sign} ${esc(o[1])}</div>`;
   }).join('');
-  $('#diffbox').innerHTML = `<h2 style="margin-top:0">Diff</h2><div class="diff">${html}</div>
+  return `<p class="note" style="margin-bottom:6px">
+      <span class="ok">+${adds}</span> / <span class="err">−${dels}</span> lines
+    </p><div class="diff">${body}</div>`;
+}
+
+function renderDiff(before, after) {
+  if (!before) { $('#diffbox').innerHTML = ''; return; }
+  $('#diffbox').innerHTML = `<h2 style="margin-top:0">Diff</h2>${diffHtml(before, after)}
     <h2 style="margin-top:18px">Full file</h2>`;
 }
 
-function chart(rows, xKey, series, title, sub, opts={}) {
-  const W=640, H=270, PAD=52;
-  const xs = rows.map(r => +r[xKey]);
-  const all = series.flatMap(s => rows.map(r => +r[s.k]));
-  const ymax = Math.max(...all, 1);
-  const logx = opts.logx !== false, logy = opts.logy !== false;
-  const x0=PAD, x1=W-PAD-84, y0=H-34, y1=26;
-  const lx = v => logx ? x0 + (Math.log10(Math.max(v,1))/Math.log10(Math.max(...xs)))*(x1-x0)
-                       : x0 + ((v-Math.min(...xs))/(Math.max(...xs)-Math.min(...xs)||1))*(x1-x0);
-  const ly = v => logy ? y0 - (Math.log10(Math.max(v,1))/Math.log10(ymax))*(y0-y1)
-                       : y0 - (v/ymax)*(y0-y1);
-  const grid = (logy ? [1,10,100,1000,10000] : [0,ymax/2,ymax]).filter(v=>v<=ymax).map(v =>
-    `<line x1="${x0}" y1="${ly(v)}" x2="${x1}" y2="${ly(v)}" stroke="var(--line)"/>
-     <text x="${x0-7}" y="${ly(v)+4}" text-anchor="end" font-size="10" fill="var(--dim)">${v>=1000?(v/1000)+'k':Math.round(v)}</text>`).join('');
-  const xt = xs.map(v => `<text x="${lx(v)}" y="${y0+15}" text-anchor="middle" font-size="10" fill="var(--dim)">${v}</text>`).join('');
-  const paths = series.map(sr => {
-    const d = rows.map((r,i)=>`${i?'L':'M'}${lx(+r[xKey])},${ly(+r[sr.k])}`).join(' ');
-    const dots = rows.map(r=>`<circle cx="${lx(+r[xKey])}" cy="${ly(+r[sr.k])}" r="3" fill="${sr.c}"/>`).join('');
-    const last = rows[rows.length-1];
-    return `<path d="${d}" fill="none" stroke="${sr.c}" stroke-width="2.2"/>${dots}
-      <text x="${x1+7}" y="${ly(+last[sr.k])+4}" font-size="11" font-weight="600" fill="${sr.c}">${sr.n}</text>`;
-  }).join('');
-  return `<h2 style="margin-top:18px">${esc(title)}</h2><p class="note">${sub}</p>
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">
-      <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y0}" stroke="var(--line2)"/>
-      <line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1}" stroke="var(--line2)"/>
-      ${grid}${xt}${paths}</svg>`;
-}
 
-$('#runtests').onclick = async () => {
-  $('#testout').innerHTML = '<p class="muted">Running…</p>';
-  const r = await fetch('/api/tests').then(r => r.json());
-  if (r.error) { $('#testout').innerHTML = `<pre class="err">${esc(r.error)}</pre>`; return; }
-  const pass = r.passed === r.total;
-  $('#testout').innerHTML = `
-    <div class="stats">
-      <div class="stat"><div class="v ${pass?'ok':'err'}">${r.passed}/${r.total}</div><div class="k">tests passing</div></div>
-    </div>
-    <table class="data">
-      <tr><th>subject</th><th>assertion</th><th>result</th></tr>
-      ${r.results.map(t => `<tr>
-        <td><code>${esc(t.subject||'—')}</code></td>
-        <td>${esc(t.desc)}</td>
-        <td class="${t.passed?'ok':'err'}">${t.passed?'pass':'FAIL'}</td>
-      </tr>`).join('')}
-    </table>
-    ${r.results.filter(t=>!t.passed).map(t=>`<pre class="err">${esc(t.error||'')}</pre>`).join('')}`;
-};
-
-$('#runbench').onclick = async () => {
-  $('#testout').innerHTML = '<p class="muted">Measuring…</p>';
-  const [b, sc, fo] = await Promise.all([
-    fetch('/api/bench').then(r=>r.json()),
-    fetch('/api/subgraph_costs').then(r=>r.json()),
-    fetch('/api/fanout').then(r=>r.json()),
-  ]);
-  if (b.error) { $('#testout').innerHTML = `<pre class="err">${esc(b.error)}</pre>`; return; }
-  const rows = b.rows;
-  const cross = rows.find(r => r.context_ratio >= 1);
-
-  $('#testout').innerHTML =
-    chart(rows, 'buckets',
-      [{k:'file_tokens', c:'#b3462c', n:'whole file'},
-       {k:'subgraph_tokens', c:'#1d7a4c', n:'subgraph'}],
-      'Context sent per edit',
-      'Synthetic programs of increasing size. Counted directly — no API calls.') +
-
-    chart(rows, 'buckets',
-      [{k:'context_ratio', c:'#2563c9', n:'context only'},
-       {k:'effective_ratio', c:'#8a6a17', n:'incl. prompt overhead'}],
-      'How many times cheaper the subgraph is',
-      'The second line is the one that matters in practice: the system prompt and tool schemas ride on every turn.',
-      {logy:false}) +
-
-    chart((fo.rows||[]), 'fanout',
-      [{k:'subgraph_tokens', c:'#1d7a4c', n:'subgraph'},
-       {k:'file_tokens', c:'#b3462c', n:'whole file'}],
-      'Subgraph cost vs fan-out (program size held at 82 buckets)',
-      'The variable that actually drives it. The file line is flat here because the program is not changing — only how many neighbours the edited bucket has.',
-      {logx:false}) +
-
-    `<h2 style="margin-top:18px">Subgraph cost tracks structure, not program size</h2>
-     <p class="note">Per bucket in <span class="mono">${esc(PROGRAM.file)}</span>. A bucket with more callees carries more neighbours, so it costs more — the flat line in the synthetic sweep above is an artefact of generated helpers that call nothing.</p>
-     <table class="data">
-       <tr><th>bucket</th><th class="n">subgraph tok</th><th class="n">file tok</th><th class="n">ratio</th></tr>
-       ${(sc.rows||[]).map(x=>`<tr>
-         <td><code>${esc(x.label)}</code></td>
-         <td class="n">${x.subgraph}</td><td class="n">${x.file}</td>
-         <td class="n">${x.ratio.toFixed(2)}x</td></tr>`).join('')}
-     </table>
-
-     <h2 style="margin-top:18px">What this means</h2>
-     <p class="note" style="margin-bottom:8px">
-       <b>Break-even is around ${cross ? cross.buckets : '?'} buckets.</b> Below that, the fixed cost of the
-       prompt and tool schemas (${rows[0].agent_overhead} tokens, paid every turn) is larger than the file
-       being replaced, so sending the file is simply cheaper and the honest answer is to do that.
-     </p>
-     <p class="note" style="margin-bottom:8px">
-       <b>The saving comes from output, not input.</b> Measured live, the whole-file arm had to re-emit the
-       entire program (4042 output tokens at 82 buckets, versus 325 for one bucket body). Output bills at
-       5x input, so that difference dominates the total — the input-side saving is the smaller half of the story.
-     </p>
-     <p class="note" style="margin-bottom:8px">
-       <b>The ratio grows without bound.</b> Whole-file cost is linear in program size; bucket cost tracks the
-       neighbourhood. Measured at 7.0x on an 82-bucket program, and nothing about the curve flattens after that.
-     </p>
-     <p class="note">
-       <b>The unmeasured risk is correctness, not cost.</b> Both arms passed here, but a whole-file rewrite
-       cannot prove it changed only what was asked — there is no atomicity check available to it. That
-       guarantee is the part of this design that a token count does not capture.
-     </p>`;
-};
-
-function arm(name, d, fileTok) {
+function arm(name, d) {
   if (!d || d.error) return `<div class="arm"><h3>${esc(name)}</h3><div class="err" style="font-size:12px">${esc((d&&d.error)||'not run')}</div></div>`;
   const sp = d.spend || {};
-  const ok = d.ok;
-  const edited = d.edited;
-  return `<div class="arm ${ok ? 'win' : ''}">
+  return `<div class="arm ${d.edited ? 'win' : ''}">
     <h3>${esc(name)}</h3>
     <div class="n">$${(sp.usd ?? 0).toFixed(4)}</div>
     <div class="u">${sp.input_tokens ?? 0} in · ${sp.output_tokens ?? 0} out · ${sp.requests ?? 0} call(s)</div>
     <div class="u" style="margin-top:6px">
+      ${d.edited ? '<span class="ok">edited</span>' : '<span class="muted">no change made</span>'}
       ${d.turns != null ? ` · ${d.turns} turns` : ''}
-      ${d.changed_lines != null ? ` · ${d.changed_lines} lines rewritten` : ''}</div>
+      ${d.changed_lines != null ? ` · ${d.changed_lines} lines differ` : ''}</div>
   </div>`;
 }
 
@@ -625,21 +527,52 @@ $('#xrun').onclick = async () => {
   $('#xrun').disabled = false;
 
   if (r.error) { $('#xout').innerHTML = `<pre class="err">${esc(r.error)}</pre>`; return; }
-  const bu = r.buckets, wf = r.whole_file;
-  const ratio = (bu && wf && bu.spend && wf.spend && bu.spend.usd > 0)
-    ? (wf.spend.usd / bu.spend.usd) : null;
+  const bu = r.buckets, wf = r.whole_file, orig = r.original_source;
+  const sp = d => (d && d.spend) || {};
+  const b = sp(bu), w = sp(wf);
+  const ratio = (b.usd > 0 && w.usd != null) ? (w.usd / b.usd) : null;
+  const row = (k, a, c) => `<tr><td>${k}</td><td class="n">${a}</td><td class="n">${c}</td></tr>`;
 
   $('#xout').innerHTML = `
-    <div class="cmp" style="margin-top:12px">${arm('Buckets', bu, r.file_tokens)}${arm('Whole file', wf, r.file_tokens)}</div>
+    <div class="cmp" style="margin-top:12px">${arm('Buckets', bu)}${arm('Whole file', wf)}</div>
     ${ratio ? `<p class="verdict">Whole file cost <b>${ratio.toFixed(2)}×</b> the bucket path on this run.
-      ${ratio < 1 ? 'Below break-even — at this program size the fixed prompt overhead outweighs the file.' : ''}</p>` : ''}
-    ${bu && bu.tool_calls ? `<h2 style="margin-top:14px">Tool calls</h2>` + bu.tool_calls.map(t => `
-      <div class="tool ${t.ok ? 'good' : 'bad'}">
-        <span class="nm">${esc(t.name)}</span>
-        <span class="muted">${esc(JSON.stringify(t.input).slice(0,120))}</span>
-        <div class="res">${esc((t.result||'').split('\n').slice(0,4).join('\n'))}</div>
-      </div>`).join('') : ''}
-    ${bu && bu.summary ? `<pre>${esc(bu.summary)}</pre>` : ''}`;
+      ${ratio < 1 ? 'Below break-even — at this size the fixed prompt overhead outweighs the file it replaces.' : ''}</p>` : ''}
+
+    <table class="data" style="margin-bottom:16px">
+      <tr><th></th><th class="n">buckets</th><th class="n">whole file</th></tr>
+      ${row('input tokens', b.input_tokens ?? '—', w.input_tokens ?? '—')}
+      ${row('output tokens', b.output_tokens ?? '—', w.output_tokens ?? '—')}
+      ${row('cached input', b.cache_read_tokens ?? '—', w.cache_read_tokens ?? '—')}
+      ${row('api calls', b.requests ?? '—', w.requests ?? '—')}
+      ${row('cost', b.usd != null ? '$'+b.usd.toFixed(4) : '—', w.usd != null ? '$'+w.usd.toFixed(4) : '—')}
+      ${row('compiles', bu ? (bu.ok ? 'yes' : '—') : '—', wf ? (wf.compiles ? 'yes' : '<span class="err">NO</span>') : '—')}
+      ${row('tests pass', bu ? (bu.ok ? 'yes' : '—') : '—', wf ? (wf.tests_pass ? 'yes' : '<span class="err">NO</span>') : '—')}
+      ${row('made a change', bu ? (bu.edited ? 'yes' : 'no — said none needed') : '—',
+                            wf ? (wf.edited ? 'yes' : 'no — echoed the file back') : '—')}
+      ${row('<b>atomicity provable</b>', '<span class="ok">yes</span>', '<span class="err">no</span>')}
+    </table>
+
+    <div class="cmp" style="align-items:start">
+      <div><h2 style="margin-top:0">What buckets changed</h2>
+        ${bu && bu.source ? diffHtml(orig, bu.source) : '<p class="muted">no change written</p>'}</div>
+      <div><h2 style="margin-top:0">What whole-file changed</h2>
+        ${wf && wf.source ? diffHtml(orig, wf.source) : '<p class="muted">no output</p>'}
+        ${wf && wf.error ? `<pre class="err">${esc(wf.error.split('\n').slice(0,6).join('\n'))}</pre>` : ''}</div>
+    </div>
+
+    ${bu && bu.tool_calls ? `<h2 style="margin-top:18px">Every call, and what it changed</h2>
+      <p class="note">Each edit is diffed against the state before it, so an intermediate mistake stays visible even when the final result is correct.</p>` +
+      (() => { let prev = orig; return bu.tool_calls.map(t => {
+        const d = t.source_after ? diffHtml(prev, t.source_after, 1) : '';
+        if (t.source_after) prev = t.source_after;
+        return `<div class="tool ${t.ok ? 'good' : 'bad'}">
+          <span class="nm">${esc(t.name)}</span> <span class="muted">turn ${t.turn}</span>
+          <div class="res">${esc(JSON.stringify(t.input).slice(0,220))}</div>
+          <div class="res">${esc((t.result||'').split('\n').slice(0,4).join('\n'))}</div>
+          ${d ? `<div style="margin-top:6px">${d}</div>` : ''}</div>`;
+      }).join(''); })() : ''}
+    ${bu && bu.summary ? `<h2 style="margin-top:14px">Agent summary</h2><pre>${esc(bu.summary)}</pre>` : ''}`;
+
   if ($('#xwrite').checked) await load();
   loadRuns();
 };
@@ -665,30 +598,25 @@ async function loadRuns() {
 $('#xreload').onclick = loadRuns;
 
 // Load a different program. The server validates it compiles before switching,
-// so a bad paste cannot leave the UI stuck on a file nothing else can read.
+// so a bad file cannot leave the UI stuck on something nothing else can read.
 $('#openfile').onchange = async e => {
   const f = e.target.files[0];
   if (!f) return;
-  const lbl = $('#openlbl');
-  const restore = lbl.textContent;
+  const lbl = $('#openlbl'), restore = lbl.textContent;
   lbl.textContent = 'loading…';
   try {
-    const source = await f.text();
     const r = await fetch('/api/open', {
       method: 'POST', headers: {'content-type':'application/json'},
-      body: JSON.stringify({ name: f.name, source }),
+      body: JSON.stringify({ name: f.name, source: await f.text() }),
     }).then(r => r.json());
-    if (r.error) {
-      alert(r.error);
-    } else {
+    if (r.error) alert(r.error);
+    else {
       PROGRAM = null; PREV_SOURCE = null; CHANGED = new Set(); SELECTED = null;
       $('#cmp').innerHTML = '<p class="muted">Select a bucket on the left.</p>';
       $('#xout').innerHTML = ''; $('#testout').innerHTML = '';
       await load(); loadRuns();
     }
-  } catch (err) {
-    alert(err.message);
-  }
+  } catch (err) { alert(err.message); }
   lbl.textContent = restore;
   e.target.value = '';
 };

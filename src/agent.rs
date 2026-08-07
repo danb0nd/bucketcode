@@ -57,6 +57,13 @@ pub struct ToolRecord {
     pub ok: bool,
     /// Truncated for display; the model saw the whole thing.
     pub result: String,
+    /// The program *after* this call, when the call changed it.
+    ///
+    /// Recorded per call rather than only at the end so each individual edit can
+    /// be inspected: a run that reaches the right final state through a wrong
+    /// intermediate one looks identical from the outcome alone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_after: Option<String>,
 }
 
 /// The tools the model can call.
@@ -1214,7 +1221,9 @@ pub fn run(
         // splitting them across messages trains the model out of parallel calls.
         let mut results = Vec::new();
         for call in &completion.tool_calls {
+            let before_src = ws.source.clone();
             let (out, is_error) = dispatch(&mut ws, call);
+            let changed = ws.source != before_src;
             eprintln!(
                 "  {} {} -> {}",
                 if is_error { "✗" } else { "✓" },
@@ -1227,6 +1236,7 @@ pub fn run(
                 input: call.input.clone(),
                 ok: !is_error,
                 result: out.chars().take(2_000).collect(),
+                source_after: changed.then(|| ws.source.clone()),
             });
             results.push(call.result(out, is_error));
         }
@@ -1349,7 +1359,9 @@ exactly as it was."#;
         compiles,
         tests_pass,
         error,
-        source: if compiles && tests_pass { Some(text) } else { None },
+        // Kept even when rejected: seeing *why* a rewrite failed is the point
+        // of running the comparison at all.
+        source: Some(text),
         spend: guard.spend().clone(),
         changed_lines,
     })

@@ -488,6 +488,10 @@ fn route(
                 "model": model,
                 "file": file.display().to_string(),
                 "file_tokens": estimate_tokens(&src),
+                // Kept so the UI can diff each arm's output against the same
+                // starting point -- the whole comparison is what *changed*, and
+                // an arm that quietly rewrote something else should be visible.
+                "original_source": src,
             });
 
             if arms == "both" || arms == "buckets" {

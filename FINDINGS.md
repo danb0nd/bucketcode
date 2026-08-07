@@ -174,7 +174,48 @@ old behaviour — asked to change a tax rate from 8% to 20%, the model correctly
 produced the new body and was rejected by `@test with_tax(100) == 108`, with no
 way to update it.
 
-## 9. The tool set must match the unit of change
+## 9. Eleven runs across two program sizes
+
+Same seven task shapes on a 5-bucket program, four on an 82-bucket one, both
+arms each, all gated identically.
+
+**5-bucket program — the bucket path lost every time (0.09×–0.65×).**
+
+| task | model | buckets | whole file | ratio |
+|---|---|--:|--:|--:|
+| simple body change | Sonnet 5 | $0.0417 | $0.0090 | 0.22× |
+| needs a test update | Sonnet 5 | $0.0154 | $0.0066 | 0.43× |
+| add a bucket | Sonnet 5 | $0.0117 | $0.0077 | 0.65× |
+| rename | Sonnet 5 | $0.0128 | $0.0069 | 0.54× |
+| simple body change | Haiku 4.5 | $0.0185 | $0.0018 | 0.09× |
+
+**82-bucket program — it won every time (1.06×–4.92×).**
+
+| task | model | buckets (out tok) | whole file (out tok) | ratio |
+|---|---|--:|--:|--:|
+| body change | Sonnet 5 | $0.0187 (461) | $0.0742 (4074) | 3.96× |
+| add a bucket | Sonnet 5 | $0.0228 (576) | $0.0743 (4082) | 3.26× |
+| rename | Sonnet 5 | $0.0150 (266) | $0.0739 (4054) | 4.92× |
+| body change | Haiku 4.5 | $0.0201 (537) | $0.0214 (3523) | 1.06× |
+
+**Program size decides the winner, not the task.** Every task type sits on the
+same side of the line at a given size. The whole-file arm emits ~4,000 output
+tokens *whatever the task is*, because it re-types the program; the bucket arm
+emits 266–576 depending on the edit. That single number explains every row.
+
+**A cheaper model narrows the gap sharply.** Haiku at 82 buckets is only 1.06×,
+against Sonnet's 3.96× on the identical task. Haiku's output is $5/MTok against
+Sonnet's $15, so the penalty for re-emitting a file is a third the size. The
+compression matters *less* the cheaper the model — worth knowing before
+optimising context for a workload that could just use a smaller model.
+
+**Both arms independently read "make sure X" as "add tests proving X".** Asked
+to *"make sure subtotal adds up the item prices"* — which it already did —
+neither rewrote the working body. Both added `@test` cases instead. That is the
+right call, and it only looked like a failure until `ok` was split from
+`edited`.
+
+## 10. The tool set must match the unit of change
 
 Adding the missing capabilities exposed something sharper than "a tool was
 missing".
@@ -211,7 +252,7 @@ output tokens, and a body is just a smaller file.
 test" was accurate and useless — the model gave up. Naming the fix in the error
 text is what got it to recover.
 
-## 10. Known problems
+## 11. Known problems
 
 **`list_buckets` is O(program).** It returns every bucket — 1,643 tokens at 82
 buckets — and stays in conversation history for every later turn. When a model
@@ -231,7 +272,7 @@ to show direction, not enough for confidence intervals.
 **Untested at scale.** Nothing here has run against a program of hundreds of
 buckets written by a person rather than a generator.
 
-## 11. What I would do next
+## 12. What I would do next
 
 1. **Cap `list_buckets`** — it is the one measured thing breaking the core
    property.

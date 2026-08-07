@@ -1,0 +1,12 @@
+program_buckets,task,model,bucket_usd,bucket_out_tok,file_usd,file_out_tok,ratio
+5,simple body change,sonnet-5,0.0417,,0.0090,,0.22
+5,needs test update,sonnet-5,0.0154,,0.0066,,0.43
+5,add a bucket,sonnet-5,0.0117,,0.0077,,0.65
+5,no change needed,sonnet-5,0.0497,,0.0099,,0.20
+5,rename,sonnet-5,0.0128,,0.0069,,0.54
+5,simple body change,haiku-4.5,0.0185,,0.0018,,0.09
+5,needs test update,haiku-4.5,0.0199,,0.0018,,0.09
+82,body change,sonnet-5,0.0187,461,0.0742,4074,3.96
+82,add a bucket,sonnet-5,0.0228,576,0.0743,4082,3.26
+82,rename,sonnet-5,0.0150,266,0.0739,4054,4.92
+82,body change,haiku-4.5,0.0201,537,0.0214,3523,1.06

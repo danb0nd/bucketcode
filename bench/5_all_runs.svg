@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 360" font-family="ui-sans-serif,system-ui,sans-serif">
+<style>.bg{fill:#fbfbfa}.t{font-size:15px;font-weight:600;fill:#1a1d21}.s{font-size:11.5px;fill:#6b7280}.lab{font-size:10.5px;fill:#6b7280}@media(prefers-color-scheme:dark){.bg{fill:#0d0f12}.t{fill:#e3e6ea}}</style>
+<rect class="bg" width="700" height="360"/>
+<text class="t" x="62" y="26">Every measured run, 11 tasks</text>
+<text class="s" x="62" y="45">Whole-file cost ÷ bucket cost. Above the line, editing one bucket is cheaper.</text>
+<line x1="62" y1="308.0" x2="568" y2="308.0" stroke="#ececea" stroke-width="1" />
+<text class="lab" x="55" y="312.0" text-anchor="end">0x</text>
+<line x1="62" y1="263.0" x2="568" y2="263.0" stroke="#9aa1ad" stroke-width="1.6" stroke-dasharray="5 4"/>
+<text class="lab" x="55" y="267.0" text-anchor="end">1x</text>
+<line x1="62" y1="218.0" x2="568" y2="218.0" stroke="#ececea" stroke-width="1" />
+<text class="lab" x="55" y="222.0" text-anchor="end">2x</text>
+<line x1="62" y1="173.0" x2="568" y2="173.0" stroke="#ececea" stroke-width="1" />
+<text class="lab" x="55" y="177.0" text-anchor="end">3x</text>
+<line x1="62" y1="128.0" x2="568" y2="128.0" stroke="#ececea" stroke-width="1" />
+<text class="lab" x="55" y="132.0" text-anchor="end">4x</text>
+<line x1="62" y1="83.0" x2="568" y2="83.0" stroke="#ececea" stroke-width="1" />
+<text class="lab" x="55" y="87.0" text-anchor="end">5x</text>
+<text class="lab" x="568" y="256.0" text-anchor="end">break-even</text>
+<rect x="72.0" y="298.1" width="25.7" height="9.9" fill="#b3462c" rx="2"/>
+<text class="lab" x="84.8" y="293.1" text-anchor="middle" font-size="9">0.22</text>
+<rect x="110.9" y="288.6" width="25.7" height="19.4" fill="#b3462c" rx="2"/>
+<text class="lab" x="123.8" y="283.6" text-anchor="middle" font-size="9">0.43</text>
+<rect x="149.8" y="278.8" width="25.7" height="29.2" fill="#b3462c" rx="2"/>
+<text class="lab" x="162.7" y="273.8" text-anchor="middle" font-size="9">0.65</text>
+<rect x="188.8" y="299.0" width="25.7" height="9.0" fill="#b3462c" rx="2"/>
+<text class="lab" x="201.6" y="294.0" text-anchor="middle" font-size="9">0.20</text>
+<rect x="227.7" y="283.7" width="25.7" height="24.3" fill="#b3462c" rx="2"/>
+<text class="lab" x="240.5" y="278.7" text-anchor="middle" font-size="9">0.54</text>
+<rect x="266.6" y="303.9" width="25.7" height="4.1" fill="#b3462c" rx="2"/>
+<text class="lab" x="279.5" y="298.9" text-anchor="middle" font-size="9">0.09</text>
+<rect x="305.5" y="303.9" width="25.7" height="4.1" fill="#b3462c" rx="2"/>
+<text class="lab" x="318.4" y="298.9" text-anchor="middle" font-size="9">0.09</text>
+<rect x="344.5" y="129.8" width="25.7" height="178.2" fill="#1d7a4c" rx="2"/>
+<text class="lab" x="357.3" y="124.8" text-anchor="middle" font-size="9">3.96</text>
+<rect x="383.4" y="161.3" width="25.7" height="146.7" fill="#1d7a4c" rx="2"/>
+<text class="lab" x="396.2" y="156.3" text-anchor="middle" font-size="9">3.26</text>
+<rect x="422.3" y="86.6" width="25.7" height="221.4" fill="#1d7a4c" rx="2"/>
+<text class="lab" x="435.2" y="81.6" text-anchor="middle" font-size="9">4.92</text>
+<rect x="461.2" y="260.3" width="25.7" height="47.7" fill="#1d7a4c" rx="2"/>
+<text class="lab" x="474.1" y="255.3" text-anchor="middle" font-size="9">1.06</text>
+<text class="lab" x="201.6" y="326" text-anchor="middle">5-bucket program (7 tasks)</text>
+<text class="lab" x="415.7" y="326" text-anchor="middle">82-bucket program (4 tasks)</text>
+<line x1="337.8" y1="74" x2="337.8" y2="308" stroke="#c9c9c5" stroke-dasharray="3 3"/>
+<text class="s" x="62" y="346">Same tasks, same gates. The program size decides the winner, not the task.</text>
+</svg>

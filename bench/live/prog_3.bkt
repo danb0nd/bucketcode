@@ -1,0 +1,21 @@
+@test price_total(10) == 21.6
+price_total(p: Num) -> Num "total price for two of an item including sales tax" {
+  p * 2 * 1.08
+}
+
+helper_0(x: Num) -> Num "apply adjustment number 0 to a running order total" {
+  x + 0 * 2 - 1
+}
+
+helper_1(x: Num) -> Num "apply adjustment number 1 to a running order total" {
+  x + 1 * 2 - 1
+}
+
+helper_2(x: Num) -> Num "apply adjustment number 2 to a running order total" {
+  x + 2 * 2 - 1
+}
+
+@entry
+main() -> Num "checkout total" {
+  price_total(19.99)
+}

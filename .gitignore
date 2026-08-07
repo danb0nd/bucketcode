@@ -1,0 +1,23 @@
+/target/
+**/*.rs.bk
+
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local scratch
+*.log
+/tmp/
+
+# Experiment logs and edited workspace files are local, not source
+workspace/*.runs.jsonl
+workspace/*_backup.bkt

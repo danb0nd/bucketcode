@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" font-family="ui-sans-serif,system-ui,sans-serif">
+<style>.bg{fill:#fbfbfa}.ax{stroke:#c9c9c5}.gr{stroke:#ececea}.t{font-size:15.5px;font-weight:600;fill:#1a1d21}.s{font-size:11.5px;fill:#6b7280}.lab{font-size:10.5px;fill:#6b7280}.k{font-size:11.5px;font-weight:600}@media(prefers-color-scheme:dark){.bg{fill:#0d0f12}.ax{stroke:#3a4049}.gr{stroke:#1e222a}.t{fill:#e3e6ea}}</style>
+<rect class="bg" width="760" height="420"/>
+<text class="t" x="66" y="28">How many times more expensive the conventional approach is</text>
+<text class="s" x="66" y="47">Above 1.0, editing one bucket is cheaper than rewriting the file.</text>
+<line class="ax" x1="66" y1="354" x2="598" y2="354"/>
+<line class="ax" x1="66" y1="354" x2="66" y2="78"/>
+<line class="gr" x1="66" y1="354.0" x2="598" y2="354.0"/>
+<text class="lab" x="58" y="358.0" text-anchor="end">0.0x</text>
+<line class="gr" x1="66" y1="285.0" x2="598" y2="285.0"/>
+<text class="lab" x="58" y="289.0" text-anchor="end">2.0x</text>
+<line class="gr" x1="66" y1="216.0" x2="598" y2="216.0"/>
+<text class="lab" x="58" y="220.0" text-anchor="end">4.0x</text>
+<line class="gr" x1="66" y1="147.0" x2="598" y2="147.0"/>
+<text class="lab" x="58" y="151.0" text-anchor="end">6.0x</text>
+<line class="gr" x1="66" y1="78.0" x2="598" y2="78.0"/>
+<text class="lab" x="58" y="82.0" text-anchor="end">8.0x</text>
+<text class="lab" x="260.3" y="371" text-anchor="middle">5</text>
+<text class="lab" x="439.2" y="371" text-anchor="middle">22</text>
+<text class="lab" x="598.0" y="371" text-anchor="middle">82</text>
+<text class="lab" x="332.0" y="406" text-anchor="middle">buckets in program (log scale)</text>
+<text class="lab" x="17" y="216.0" text-anchor="middle" transform="rotate(-90 17 216.0)">cost ratio</text>
+<line x1="260.3" y1="319.5" x2="598.0" y2="319.5" stroke="#9aa1ad" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text class="lab" x="598.0" y="312.5" text-anchor="end">break-even</text>
+<path d="M260.3,333.0 L439.2,286.7 L598.0,111.8" fill="none" stroke="#2563c9" stroke-width="2.4"/>
+<circle cx="260.3" cy="333.0" r="3.4" fill="#2563c9"/>
+<circle cx="439.2" cy="286.7" r="3.4" fill="#2563c9"/>
+<circle cx="598.0" cy="111.8" r="3.4" fill="#2563c9"/>
+<text class="k" x="607" y="115.8" fill="#2563c9">measured</text>
+<text class="s" x="66" y="388">Crossover is around 10 buckets. Below it the fixed prompt overhead dominates; above it the gap widens without limit.</text>
+</svg>

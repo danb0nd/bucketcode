@@ -1,0 +1,89 @@
+@test price_total(10) == 21.6
+price_total(p: Num) -> Num "total price for two of an item including sales tax" {
+  p * 2 * 1.08
+}
+
+helper_0(x: Num) -> Num "apply adjustment number 0 to a running order total" {
+  x + 0 * 2 - 1
+}
+
+helper_1(x: Num) -> Num "apply adjustment number 1 to a running order total" {
+  x + 1 * 2 - 1
+}
+
+helper_2(x: Num) -> Num "apply adjustment number 2 to a running order total" {
+  x + 2 * 2 - 1
+}
+
+helper_3(x: Num) -> Num "apply adjustment number 3 to a running order total" {
+  x + 3 * 2 - 1
+}
+
+helper_4(x: Num) -> Num "apply adjustment number 4 to a running order total" {
+  x + 4 * 2 - 1
+}
+
+helper_5(x: Num) -> Num "apply adjustment number 5 to a running order total" {
+  x + 5 * 2 - 1
+}
+
+helper_6(x: Num) -> Num "apply adjustment number 6 to a running order total" {
+  x + 6 * 2 - 1
+}
+
+helper_7(x: Num) -> Num "apply adjustment number 7 to a running order total" {
+  x + 7 * 2 - 1
+}
+
+helper_8(x: Num) -> Num "apply adjustment number 8 to a running order total" {
+  x + 8 * 2 - 1
+}
+
+helper_9(x: Num) -> Num "apply adjustment number 9 to a running order total" {
+  x + 9 * 2 - 1
+}
+
+helper_10(x: Num) -> Num "apply adjustment number 10 to a running order total" {
+  x + 10 * 2 - 1
+}
+
+helper_11(x: Num) -> Num "apply adjustment number 11 to a running order total" {
+  x + 11 * 2 - 1
+}
+
+helper_12(x: Num) -> Num "apply adjustment number 12 to a running order total" {
+  x + 12 * 2 - 1
+}
+
+helper_13(x: Num) -> Num "apply adjustment number 13 to a running order total" {
+  x + 13 * 2 - 1
+}
+
+helper_14(x: Num) -> Num "apply adjustment number 14 to a running order total" {
+  x + 14 * 2 - 1
+}
+
+helper_15(x: Num) -> Num "apply adjustment number 15 to a running order total" {
+  x + 15 * 2 - 1
+}
+
+helper_16(x: Num) -> Num "apply adjustment number 16 to a running order total" {
+  x + 16 * 2 - 1
+}
+
+helper_17(x: Num) -> Num "apply adjustment number 17 to a running order total" {
+  x + 17 * 2 - 1
+}
+
+helper_18(x: Num) -> Num "apply adjustment number 18 to a running order total" {
+  x + 18 * 2 - 1
+}
+
+helper_19(x: Num) -> Num "apply adjustment number 19 to a running order total" {
+  x + 19 * 2 - 1
+}
+
+@entry
+main() -> Num "checkout total" {
+  price_total(19.99)
+}

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" font-family="ui-sans-serif,system-ui,sans-serif">
+<style>.bg{fill:#fbfbfa}.ax{stroke:#c9c9c5}.gr{stroke:#ececea}.t{font-size:15.5px;font-weight:600;fill:#1a1d21}.s{font-size:11.5px;fill:#6b7280}.lab{font-size:10.5px;fill:#6b7280}.k{font-size:11.5px;font-weight:600}@media(prefers-color-scheme:dark){.bg{fill:#0d0f12}.ax{stroke:#3a4049}.gr{stroke:#1e222a}.t{fill:#e3e6ea}}</style>
+<rect class="bg" width="760" height="420"/>
+<text class="t" x="66" y="28">Context sent per edit (deterministic)</text>
+<text class="s" x="66" y="47">No API calls — counted directly. The subgraph never grows.</text>
+<line class="ax" x1="66" y1="354" x2="598" y2="354"/>
+<line class="ax" x1="66" y1="354" x2="66" y2="78"/>
+<line class="gr" x1="66" y1="354.0" x2="598" y2="354.0"/>
+<text class="lab" x="58" y="358.0" text-anchor="end">1</text>
+<line class="gr" x1="66" y1="285.0" x2="598" y2="285.0"/>
+<text class="lab" x="58" y="289.0" text-anchor="end">10</text>
+<line class="gr" x1="66" y1="216.0" x2="598" y2="216.0"/>
+<text class="lab" x="58" y="220.0" text-anchor="end">100</text>
+<line class="gr" x1="66" y1="147.0" x2="598" y2="147.0"/>
+<text class="lab" x="58" y="151.0" text-anchor="end">1,000</text>
+<line class="gr" x1="66" y1="78.0" x2="598" y2="78.0"/>
+<text class="lab" x="58" y="82.0" text-anchor="end">10,000</text>
+<text class="lab" x="129.9" y="371" text-anchor="middle">2</text>
+<text class="lab" x="193.7" y="371" text-anchor="middle">4</text>
+<text class="lab" x="245.3" y="371" text-anchor="middle">7</text>
+<text class="lab" x="294.9" y="371" text-anchor="middle">12</text>
+<text class="lab" x="350.8" y="371" text-anchor="middle">22</text>
+<text class="lab" x="410.3" y="371" text-anchor="middle">42</text>
+<text class="lab" x="472.0" y="371" text-anchor="middle">82</text>
+<text class="lab" x="534.7" y="371" text-anchor="middle">162</text>
+<text class="lab" x="598.0" y="371" text-anchor="middle">322</text>
+<text class="lab" x="332.0" y="406" text-anchor="middle">buckets in program (log scale)</text>
+<text class="lab" x="17" y="216.0" text-anchor="middle" transform="rotate(-90 17 216.0)">tokens (log)</text>
+<path d="M129.9,231.3 L193.7,213.4 L245.3,197.9 L294.9,182.6 L350.8,164.5 L410.3,145.2 L472.0,125.2 L534.7,104.4 L598.0,83.6" fill="none" stroke="#b3462c" stroke-width="2.4"/>
+<circle cx="129.9" cy="231.3" r="3.4" fill="#b3462c"/>
+<circle cx="193.7" cy="213.4" r="3.4" fill="#b3462c"/>
+<circle cx="245.3" cy="197.9" r="3.4" fill="#b3462c"/>
+<circle cx="294.9" cy="182.6" r="3.4" fill="#b3462c"/>
+<circle cx="350.8" cy="164.5" r="3.4" fill="#b3462c"/>
+<circle cx="410.3" cy="145.2" r="3.4" fill="#b3462c"/>
+<circle cx="472.0" cy="125.2" r="3.4" fill="#b3462c"/>
+<circle cx="534.7" cy="104.4" r="3.4" fill="#b3462c"/>
+<circle cx="598.0" cy="83.6" r="3.4" fill="#b3462c"/>
+<text class="k" x="607" y="87.6" fill="#b3462c">whole file</text>
+<path d="M129.9,224.6 L193.7,224.6 L245.3,224.6 L294.9,224.6 L350.8,224.6 L410.3,224.6 L472.0,224.6 L534.7,224.6 L598.0,224.6" fill="none" stroke="#1d7a4c" stroke-width="2.4"/>
+<circle cx="129.9" cy="224.6" r="3.4" fill="#1d7a4c"/>
+<circle cx="193.7" cy="224.6" r="3.4" fill="#1d7a4c"/>
+<circle cx="245.3" cy="224.6" r="3.4" fill="#1d7a4c"/>
+<circle cx="294.9" cy="224.6" r="3.4" fill="#1d7a4c"/>
+<circle cx="350.8" cy="224.6" r="3.4" fill="#1d7a4c"/>
+<circle cx="410.3" cy="224.6" r="3.4" fill="#1d7a4c"/>
+<circle cx="472.0" cy="224.6" r="3.4" fill="#1d7a4c"/>
+<circle cx="534.7" cy="224.6" r="3.4" fill="#1d7a4c"/>
+<circle cx="598.0" cy="224.6" r="3.4" fill="#1d7a4c"/>
+<text class="k" x="607" y="228.6" fill="#1d7a4c">subgraph</text>
+<text class="s" x="66" y="388">Flat at 75 tokens from 2 buckets to 322. A bucket you never touch is never sent.</text>
+</svg>

@@ -1,0 +1,51 @@
+// Math: a few cores (pow/mod/floor/abs) + bootstrapped helpers.
+
+@test pow(2, 10) == 1024
+@test pow(9, 0.5) == 3
+@test two_pow_ten() == 1024
+two_pow_ten() -> Num "2 ** 10 via infix" {
+  2 ** 10
+}
+
+@test sqrt(9) == 3
+sqrt(x: Num) -> Num "square root via pow" {
+  pow(x, 0.5)
+}
+
+@test min(3, 1) == 1
+@test max(3, 1) == 3
+min(a: Num, b: Num) -> Num "smaller of two" {
+  if a < b then a else b
+}
+max(a: Num, b: Num) -> Num "larger of two" {
+  if a > b then a else b
+}
+
+@test clamp(5, 0, 3) == 3
+@test clamp(-1, 0, 3) == 0
+clamp(x: Num, lo: Num, hi: Num) -> Num "clamp into [lo, hi]" {
+  max(lo, min(x, hi))
+}
+
+@test fact(5) == 120
+fact(n: Num) -> Num "factorial for non-negative integers" {
+  if n <= 0 then 1 else n * fact(n - 1)
+}
+
+@test gcd(54, 24) == 6
+gcd(a: Num, b: Num) -> Num "gcd via Euclidean algorithm" {
+  if b == 0 then abs(a) else gcd(b, mod(a, b))
+}
+
+// Integer power bootstrapped with recursion (also fine to use pow / **)
+@test pow_int(2, 8) == 256
+pow_int(base: Num, exp: Num) -> Num "non-negative integer exponent" {
+  if exp <= 0 then 1 else base * pow_int(base, exp - 1)
+}
+
+@entry
+main() -> Num "print 2**10 and fact(5)" {
+  print(2 ** 10)
+  print(fact(5))
+  gcd(54, 24)
+}

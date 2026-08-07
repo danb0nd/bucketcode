@@ -1,0 +1,23 @@
+[package]
+name = "bucketcode"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "An agentic coding harness that edits one bucket at a time instead of rewriting files"
+
+[lib]
+name = "bucketcode"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bucketcode"
+path = "src/main.rs"
+
+[dependencies]
+# Path dependency for now: the language and the harness are iterated together,
+# and publishing would mean cutting a bucketlang release for every experiment.
+bucketlang = { path = "../bucketlang_claude_fork/crates/bucketlang" }
+clap = { version = "4.6.6", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+ureq = { version = "3.3.0", features = ["json"] }

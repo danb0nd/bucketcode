@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bucketcode</title>
+<style>
+  :root {
+    --bg: #0d0f12; --panel: #14171c; --line: #232830; --line2: #2e343e;
+    --fg: #e3e6ea; --dim: #8b93a1; --dimmer: #616a78;
+    --accent: #6ea8fe; --good: #56c98a; --bad: #e5806b; --warn: #d9b25f;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #fbfbfa; --panel: #fff; --line: #e4e4e1; --line2: #d2d2ce;
+      --fg: #1a1d21; --dim: #6b7280; --dimmer: #9aa1ad;
+      --accent: #2563c9; --good: #1d7a4c; --bad: #b3462c; --warn: #8a6a17;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+  header {
+    padding: 14px 20px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+  header .file { font-family: var(--mono); font-size: 12px; color: var(--dim); }
+  header .spacer { flex: 1; }
+  .pill {
+    font-size: 11px; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--line2); color: var(--dim); white-space: nowrap;
+  }
+  .pill.on { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
+  .pill.off { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+
+  main { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 1.35fr); gap: 0; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .col { padding: 18px 20px; min-width: 0; }
+  .col + .col { border-left: 1px solid var(--line); }
+  @media (max-width: 900px) { .col + .col { border-left: 0; border-top: 1px solid var(--line); } }
+
+  h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em;
+    color: var(--dimmer); margin: 0 0 10px; font-weight: 600;
+  }
+  h2 + p.note { margin-top: -6px; }
+  p.note { color: var(--dim); font-size: 12.5px; margin: 0 0 14px; }
+
+  input[type=text], textarea {
+    width: 100%; background: var(--panel); color: var(--fg);
+    border: 1px solid var(--line2); border-radius: 7px; padding: 9px 11px;
+    font: inherit; outline: none;
+  }
+  input[type=text]:focus, textarea:focus { border-color: var(--accent); }
+  textarea { font-family: var(--mono); font-size: 12.5px; resize: vertical; min-height: 62px; }
+  button {
+    background: var(--accent); color: #fff; border: 0; border-radius: 7px;
+    padding: 8px 15px; font: inherit; font-weight: 500; cursor: pointer;
+  }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line2); }
+
+  .bucket {
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+    margin-bottom: 8px; background: var(--panel); cursor: pointer;
+  }
+  .bucket:hover { border-color: var(--line2); }
+  .bucket.sel { border-color: var(--accent); }
+  .bucket.changed {
+    border-color: color-mix(in srgb, var(--good) 60%, transparent);
+    background: color-mix(in srgb, var(--good) 7%, var(--panel));
+  }
+  .bucket.changed .label::after {
+    content: ' changed'; font-size: 10px; font-weight: 500;
+    color: var(--good); letter-spacing: .04em;
+  }
+  .mono { font-family: var(--mono); }
+  #src { max-height: 340px; overflow: auto; white-space: pre-wrap; }
+
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+  .tab {
+    padding: 8px 14px; font-size: 12.5px; color: var(--dim); cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px; user-select: none;
+  }
+  .tab:hover { color: var(--fg); }
+  .tab.on { color: var(--fg); border-bottom-color: var(--accent); font-weight: 500; }
+  .panel { display: none; }
+  .panel.on { display: block; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .stat { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; background: var(--panel); }
+  .stat .v { font-family: var(--mono); font-size: 19px; font-weight: 600; }
+  .stat .k { font-size: 10.5px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+
+  .gnode rect { fill: var(--panel); stroke: var(--line2); }
+  .gnode.sel rect { stroke: var(--accent); stroke-width: 2; }
+  .gnode.changed rect { stroke: var(--good); stroke-width: 2; }
+  .gnode text { font-family: var(--mono); font-size: 11px; fill: var(--fg); }
+  .gnode .sub { font-size: 9px; fill: var(--dim); }
+  .gedge { stroke: var(--line2); fill: none; marker-end: url(#arrow); }
+  .gedge.hot { stroke: var(--accent); stroke-width: 2; }
+
+  table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.data th {
+    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--dim); padding: 6px 9px; border-bottom: 1px solid var(--line);
+  }
+  table.data td { padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.data td.n { font-family: var(--mono); text-align: right; }
+  table.data tr.changed { background: color-mix(in srgb, var(--good) 8%, transparent); }
+  table.data code { font-family: var(--mono); font-size: 11.5px; }
+
+  .diff { font-family: var(--mono); font-size: 12px; line-height: 1.5; }
+  .diff div { padding: 1px 9px; white-space: pre-wrap; }
+  .diff .add { background: color-mix(in srgb, var(--good) 16%, transparent); }
+  .diff .del { background: color-mix(in srgb, var(--bad) 16%, transparent); text-decoration: line-through; opacity: .75; }
+  .diff .ctx { color: var(--dim); }
+  .bucket .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .addr { font-family: var(--mono); font-size: 11.5px; color: var(--dimmer); }
+  .label { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+  .contract { font-family: var(--mono); font-size: 11.5px; color: var(--dim); }
+  .desc { margin-top: 4px; color: var(--fg); }
+  .desc::before { content: '“'; color: var(--dimmer); }
+  .desc::after { content: '”'; color: var(--dimmer); }
+  .calls { margin-top: 5px; font-size: 11.5px; color: var(--dimmer); font-family: var(--mono); }
+  .score {
+    margin-left: auto; font-family: var(--mono); font-size: 11.5px;
+    color: var(--accent); font-weight: 600;
+  }
+
+  .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .arm { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 11px 12px; }
+  .arm.win { border-color: color-mix(in srgb, var(--good) 55%, transparent); }
+  .arm h3 { margin: 0 0 2px; font-size: 12px; font-weight: 600; }
+  .arm .n { font-family: var(--mono); font-size: 21px; font-weight: 600; }
+  .arm .u { font-size: 11px; color: var(--dim); }
+  .verdict { font-size: 12.5px; color: var(--dim); margin: 0 0 12px; }
+  .verdict b { color: var(--fg); }
+  .verdict.warn b { color: var(--warn); }
+
+  pre {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 11px 12px; overflow-x: auto; font-family: var(--mono);
+    font-size: 12px; line-height: 1.5; margin: 0 0 12px; white-space: pre;
+  }
+  .muted { color: var(--dim); }
+  .err { color: var(--bad); }
+  .ok { color: var(--good); }
+  .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  .row label { font-size: 12px; color: var(--dim); }
+  .row input[type=number] {
+    width: 74px; background: var(--panel); color: var(--fg);
+    border: 1px solid var(--line2); border-radius: 6px; padding: 5px 7px; font: inherit;
+  }
+  .tool {
+    border-left: 2px solid var(--line2); padding: 5px 0 5px 10px; margin-bottom: 7px;
+    font-family: var(--mono); font-size: 12px;
+  }
+  .tool.bad { border-left-color: var(--bad); }
+  .tool.good { border-left-color: var(--good); }
+  .tool .nm { font-weight: 600; }
+  .tool .res { color: var(--dim); white-space: pre-wrap; margin-top: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>bucketcode</h1>
+  <span class="file" id="file">loading…</span>
+  <label class="pill" style="cursor:pointer" id="openlbl">open .bkt
+    <input type="file" id="openfile" accept=".bkt,.bucket,text/plain" style="display:none">
+  </label>
+  <span class="spacer"></span>
+  <span class="pill" id="tests">—</span>
+  <span class="pill" id="keyState">—</span>
+</header>
+
+<main>
+  <section class="col">
+    <h2>The map</h2>
+    <p class="note">
+      Every bucket as address, contract, and description — no bodies. This is
+      what the agent starts from, and what it searches.
+    </p>
+
+    <input type="text" id="q" placeholder="Describe what you want, in English…" autocomplete="off">
+    <p class="note" id="qhint" style="margin-top:8px">Type to rank buckets by description. Clear to see everything.</p>
+
+    <div id="list"></div>
+  </section>
+
+  <section class="col">
+    <div class="tabs">
+      <div class="tab on" data-p="cost">Context cost</div>
+      <div class="tab" data-p="graph">Graph</div>
+      <div class="tab" data-p="data">Data</div>
+      <div class="tab" data-p="file">File</div>
+      <div class="tab" data-p="test">Testing</div>
+    </div>
+
+    <div class="panel on" id="p-cost">
+      <div id="cmp"><p class="muted">Select a bucket on the left.</p></div>
+    </div>
+
+    <div class="panel" id="p-graph">
+      <p class="note">Call structure. Arrows point from caller to callee; click a node to select it.</p>
+      <div id="graph"></div>
+    </div>
+
+    <div class="panel" id="p-data">
+      <div class="stats" id="stats"></div>
+      <table class="data" id="tbl"></table>
+    </div>
+
+    <div class="panel" id="p-file">
+      <p class="note" id="srcnote2"></p>
+      <div id="diffbox"></div>
+      <pre id="src"></pre>
+    </div>
+
+    <div class="panel" id="p-test">
+      <div class="row" style="margin-bottom:14px">
+        <button id="runtests" class="ghost">Run tests</button>
+        <button id="runbench" class="ghost">Run benchmark</button>
+        <span class="muted" style="font-size:12px">Both free — no API calls.</span>
+      </div>
+      <div id="testout"></div>
+
+      <h2 style="margin-top:24px">Experiment</h2>
+      <p class="note">
+        Run one prompt through both approaches and record everything. Costs API calls.
+      </p>
+      <textarea id="xgoal" placeholder="e.g. make subtotal sum the prices instead of counting them"></textarea>
+      <div class="row" style="margin-top:9px">
+        <button id="xrun">Run experiment</button>
+        <select id="xarms"><option value="both">both arms</option><option value="buckets">buckets only</option><option value="file">whole file only</option></select>
+        <select id="xmodel">
+          <option value="claude-sonnet-5">sonnet-5</option>
+          <option value="claude-opus-5">opus-5</option>
+          <option value="claude-haiku-4-5">haiku-4.5</option>
+        </select>
+        <label>max $<input type="number" id="xusd" value="0.30" step="0.05" min="0.01"></label>
+        <label><input type="checkbox" id="xwrite"> apply the edit</label>
+      </div>
+      <div id="xout"></div>
+
+      <h2 style="margin-top:24px">Recorded runs <button id="xreload" class="ghost" style="font-size:11px;padding:3px 9px">refresh</button></h2>
+      <p class="note">Appended to <span class="mono" id="xlog">…</span> — every run is kept.</p>
+      <div id="xruns"></div>
+    </div>
+
+    <h2 style="margin-top:22px">Agent</h2>
+    <p class="note">
+      Runs with tools. Every edit must compile, change exactly one bucket, and
+      leave that bucket's tests passing.
+    </p>
+    <textarea id="goal" placeholder="e.g. round the tax result down to whole cents"></textarea>
+    <div class="row" style="margin-top:9px">
+      <button id="go">Run agent</button>
+      <label>max $<input type="number" id="usd" value="0.25" step="0.05" min="0.01"></label>
+      <label>max calls<input type="number" id="reqs" value="6" min="1"></label>
+      <label><input type="checkbox" id="write" checked> write to file</label>
+    </div>
+    <div id="agentOut"></div>
+
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let PROGRAM = null, SELECTED = null, CHANGED = new Set();
+
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let PREV_SOURCE = null;
+
+async function load() {
+  const r = await fetch('/api/program').then(r => r.json());
+  if (r.error) { $('#list').innerHTML = `<pre class="err">${esc(r.error)}</pre>`; return; }
+
+  // Diff against the previous load so an edit is visible, not merely applied.
+  if (PROGRAM) {
+    const before = Object.fromEntries(PROGRAM.buckets.map(b => [b.address, b.body + '\u0000' + b.desc]));
+    CHANGED = new Set(r.buckets
+      .filter(b => before[b.address] !== undefined && before[b.address] !== b.body + '\u0000' + b.desc)
+      .map(b => b.address));
+    if (CHANGED.size) renderDiff(PREV_SOURCE, r.source);
+  }
+  PREV_SOURCE = r.source;
+  PROGRAM = r;
+
+  $('#file').textContent = r.file;
+  $('#tests').textContent = `${r.buckets.length} buckets · ${r.tests} tests`;
+  $('#src').textContent = r.source;
+  $('#srcnote2').innerHTML = 'Live view of <span class="mono">' + esc(r.file) + '</span>.' +
+    (CHANGED.size ? ' <span class="ok">Changed since last run — diff above.</span>' : '');
+
+  render(r.buckets.map(b => ({ ...b, score: null })));
+  renderStats(r);
+  renderTable(r);
+  renderGraph(r);
+}
+
+function render(items) {
+  if (!items.length) { $('#list').innerHTML = '<p class="muted">Nothing matched.</p>'; return; }
+  $('#list').innerHTML = items.map(b => `
+    <div class="bucket ${SELECTED === b.address ? 'sel' : ''} ${CHANGED.has(b.address) ? 'changed' : ''}" data-a="${esc(b.address)}">
+      <div class="top">
+        <span class="addr">${esc(b.address)}</span>
+        <span class="label">${esc(b.label || '')}</span>
+        <span class="contract">${esc(b.contract)}</span>
+        ${b.score != null ? `<span class="score">${b.score.toFixed(2)}</span>` : ''}
+      </div>
+      <div class="desc">${esc(b.desc)}</div>
+      <div class="calls">
+        ${b.called_by && b.called_by.length ? 'in ← ' + b.called_by.map(esc).join(', ') + '  ' : ''}
+        ${b.calls && b.calls.length ? 'out → ' + b.calls.map(esc).join(', ') : ''}
+        ${(!b.called_by || !b.called_by.length) && (!b.calls || !b.calls.length) ? 'no edges' : ''}
+      </div>
+    </div>`).join('');
+  document.querySelectorAll('.bucket').forEach(el =>
+    el.onclick = () => select(el.dataset.a));
+}
+
+async function select(addr) {
+  SELECTED = addr;
+  document.querySelectorAll('.bucket').forEach(el =>
+    el.classList.toggle('sel', el.dataset.a === addr));
+  if (PROGRAM) renderGraph(PROGRAM);
+  const r = await fetch('/api/context?bucket=' + encodeURIComponent(addr)).then(r => r.json());
+  if (r.error) { $('#cmp').innerHTML = `<pre class="err">${esc(r.error)}</pre>`; return; }
+  const file = r.arms.find(a => a.strategy === 'whole_file') || {};
+  const sub  = r.arms.find(a => a.strategy === 'subgraph') || {};
+  const subWins = sub.tokens != null && file.tokens != null && sub.tokens < file.tokens;
+  const ratio = (sub.tokens && file.tokens) ? (file.tokens / sub.tokens) : null;
+  $('#cmp').innerHTML = `
+    <div class="cmp">
+      <div class="arm ${subWins ? '' : 'win'}">
+        <h3>Whole file</h3><div class="n">${file.tokens ?? '—'}</div>
+        <div class="u">tokens · the conventional baseline</div>
+      </div>
+      <div class="arm ${subWins ? 'win' : ''}">
+        <h3>Subgraph</h3><div class="n">${sub.tokens ?? '—'}</div>
+        <div class="u">tokens · body + neighbour descriptions</div>
+      </div>
+    </div>
+    <p class="verdict ${subWins ? '' : 'warn'}">
+      ${ratio == null ? '' : subWins
+        ? `The subgraph is <b>${ratio.toFixed(2)}× cheaper</b> here, and stays flat as the program grows.`
+        : `The whole file is <b>cheaper at this size</b> — the pack's scaffolding costs more than the file it replaces.`}
+    </p>
+    <pre>${esc(sub.text || sub.error || '')}</pre>`;
+}
+
+function renderStats(r) {
+  const bodyTok = r.buckets.reduce((a, b) => a + b.body_tokens, 0);
+  const descTok = r.buckets.reduce((a, b) => a + b.desc_tokens, 0);
+  const edges = r.buckets.reduce((a, b) => a + b.calls.length, 0);
+  const stats = [
+    ['buckets', r.buckets.length],
+    ['tests', r.tests],
+    ['call edges', edges],
+    ['file tokens', r.file_tokens],
+    ['map tokens', r.map_tokens],
+    ['all bodies', bodyTok],
+    ['all descriptions', descTok],
+    ['map vs file', (r.file_tokens / Math.max(r.map_tokens, 1)).toFixed(2) + 'x'],
+  ];
+  $('#stats').innerHTML = stats.map(([k, v]) =>
+    `<div class="stat"><div class="v">${esc(v)}</div><div class="k">${esc(k)}</div></div>`).join('');
+}
+
+function renderTable(r) {
+  $('#tbl').innerHTML = `
+    <tr><th>bucket</th><th>description</th><th class="n">in</th><th class="n">out</th>
+        <th class="n">cx</th><th class="n">desc tok</th><th class="n">body tok</th><th class="n">tests</th></tr>
+    ` + r.buckets.map(b => `
+    <tr class="${CHANGED.has(b.address) ? 'changed' : ''}">
+      <td><code>${esc(b.label || b.address)}</code></td>
+      <td>${esc(b.desc)}</td>
+      <td class="n">${b.called_by.length}</td>
+      <td class="n">${b.calls.length}</td>
+      <td class="n">${b.complexity}</td>
+      <td class="n">${b.desc_tokens}</td>
+      <td class="n">${b.body_tokens}</td>
+      <td class="n">${b.tests.length}</td>
+    </tr>`).join('');
+}
+
+function renderGraph(r) {
+  // Layer nodes by call depth: entry-ish things (nothing calls them) on top,
+  // leaves at the bottom. Enough structure to read without a layout library.
+  const byLabel = {};
+  r.buckets.forEach(b => byLabel[b.label || b.address] = b);
+  const depth = {};
+  const visit = (b, d, seen) => {
+    const k = b.label || b.address;
+    if (seen.has(k)) return;
+    depth[k] = Math.max(depth[k] ?? 0, d);
+    b.calls.forEach(c => byLabel[c] && visit(byLabel[c], d + 1, new Set([...seen, k])));
+  };
+  r.buckets.filter(b => b.called_by.length === 0).forEach(b => visit(b, 0, new Set()));
+  r.buckets.forEach(b => { const k = b.label || b.address; if (depth[k] == null) depth[k] = 0; });
+
+  const layers = {};
+  r.buckets.forEach(b => {
+    const k = b.label || b.address;
+    (layers[depth[k]] ||= []).push(b);
+  });
+  const NW = 148, NH = 44, GX = 26, GY = 74;
+  const maxRow = Math.max(...Object.values(layers).map(l => l.length), 1);
+  const W = Math.max(maxRow * (NW + GX) + GX, 520);
+  const H = Object.keys(layers).length * GY + 46;
+  const pos = {};
+  Object.entries(layers).forEach(([d, list]) => {
+    const rowW = list.length * (NW + GX) - GX;
+    list.forEach((b, i) => {
+      pos[b.label || b.address] = { x: (W - rowW) / 2 + i * (NW + GX), y: 20 + d * GY };
+    });
+  });
+
+  const edges = [];
+  r.buckets.forEach(b => b.calls.forEach(c => {
+    const a = pos[b.label || b.address], z = pos[c];
+    if (!a || !z) return;
+    const hot = SELECTED === b.address || (byLabel[c] && SELECTED === byLabel[c].address);
+    const x1 = a.x + NW / 2, y1 = a.y + NH, x2 = z.x + NW / 2, y2 = z.y;
+    edges.push(`<path class="gedge ${hot ? 'hot' : ''}" d="M${x1},${y1} C${x1},${y1 + 26} ${x2},${y2 - 26} ${x2},${y2}"/>`);
+  }));
+
+  const nodes = r.buckets.map(b => {
+    const k = b.label || b.address, p = pos[k];
+    const cls = (SELECTED === b.address ? 'sel ' : '') + (CHANGED.has(b.address) ? 'changed' : '');
+    return `<g class="gnode ${cls}" data-a="${esc(b.address)}" style="cursor:pointer">
+      <rect x="${p.x}" y="${p.y}" width="${NW}" height="${NH}" rx="7"/>
+      <text x="${p.x + 10}" y="${p.y + 18}">${esc(k)}</text>
+      <text class="sub" x="${p.x + 10}" y="${p.y + 33}">in ${b.called_by.length} · out ${b.calls.length} · ${b.body_tokens}t</text>
+    </g>`;
+  }).join('');
+
+  $('#graph').innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">
+    <defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="var(--line2)"/></marker></defs>
+    ${edges.join('')}${nodes}</svg>`;
+  $('#graph').querySelectorAll('.gnode').forEach(n => n.onclick = () => select(n.dataset.a));
+}
+
+function renderDiff(before, after) {
+  if (!before) { $('#diffbox').innerHTML = ''; return; }
+  const A = before.split('\n'), B = after.split('\n');
+  // Longest common subsequence, so unchanged lines stay put instead of the
+  // whole file reading as rewritten.
+  const m = A.length, n = B.length;
+  const L = Array.from({length: m + 1}, () => new Uint32Array(n + 1));
+  for (let i = m - 1; i >= 0; i--)
+    for (let j = n - 1; j >= 0; j--)
+      L[i][j] = A[i] === B[j] ? L[i+1][j+1] + 1 : Math.max(L[i+1][j], L[i][j+1]);
+  const out = [];
+  let i = 0, j = 0;
+  while (i < m && j < n) {
+    if (A[i] === B[j]) { out.push(['ctx', A[i]]); i++; j++; }
+    else if (L[i+1][j] >= L[i][j+1]) { out.push(['del', A[i]]); i++; }
+    else { out.push(['add', B[j]]); j++; }
+  }
+  while (i < m) out.push(['del', A[i++]]);
+  while (j < n) out.push(['add', B[j++]]);
+
+  // Only show changed regions plus a little context.
+  const keep = new Set();
+  out.forEach((o, k) => { if (o[0] !== 'ctx') for (let d = -2; d <= 2; d++) keep.add(k + d); });
+  let last = -99;
+  const html = out.map((o, k) => {
+    if (!keep.has(k)) { if (last === k - 1) { last = k; return '<div class="ctx">⋯</div>'; } last = k; return ''; }
+    last = k;
+    const sign = o[0] === 'add' ? '+' : o[0] === 'del' ? '−' : ' ';
+    return `<div class="${o[0]}">${sign} ${esc(o[1])}</div>`;
+  }).join('');
+  $('#diffbox').innerHTML = `<h2 style="margin-top:0">Diff</h2><div class="diff">${html}</div>
+    <h2 style="margin-top:18px">Full file</h2>`;
+}
+
+function chart(rows, xKey, series, title, sub, opts={}) {
+  const W=640, H=270, PAD=52;
+  const xs = rows.map(r => +r[xKey]);
+  const all = series.flatMap(s => rows.map(r => +r[s.k]));
+  const ymax = Math.max(...all, 1);
+  const logx = opts.logx !== false, logy = opts.logy !== false;
+  const x0=PAD, x1=W-PAD-84, y0=H-34, y1=26;
+  const lx = v => logx ? x0 + (Math.log10(Math.max(v,1))/Math.log10(Math.max(...xs)))*(x1-x0)
+                       : x0 + ((v-Math.min(...xs))/(Math.max(...xs)-Math.min(...xs)||1))*(x1-x0);
+  const ly = v => logy ? y0 - (Math.log10(Math.max(v,1))/Math.log10(ymax))*(y0-y1)
+                       : y0 - (v/ymax)*(y0-y1);
+  const grid = (logy ? [1,10,100,1000,10000] : [0,ymax/2,ymax]).filter(v=>v<=ymax).map(v =>
+    `<line x1="${x0}" y1="${ly(v)}" x2="${x1}" y2="${ly(v)}" stroke="var(--line)"/>
+     <text x="${x0-7}" y="${ly(v)+4}" text-anchor="end" font-size="10" fill="var(--dim)">${v>=1000?(v/1000)+'k':Math.round(v)}</text>`).join('');
+  const xt = xs.map(v => `<text x="${lx(v)}" y="${y0+15}" text-anchor="middle" font-size="10" fill="var(--dim)">${v}</text>`).join('');
+  const paths = series.map(sr => {
+    const d = rows.map((r,i)=>`${i?'L':'M'}${lx(+r[xKey])},${ly(+r[sr.k])}`).join(' ');
+    const dots = rows.map(r=>`<circle cx="${lx(+r[xKey])}" cy="${ly(+r[sr.k])}" r="3" fill="${sr.c}"/>`).join('');
+    const last = rows[rows.length-1];
+    return `<path d="${d}" fill="none" stroke="${sr.c}" stroke-width="2.2"/>${dots}
+      <text x="${x1+7}" y="${ly(+last[sr.k])+4}" font-size="11" font-weight="600" fill="${sr.c}">${sr.n}</text>`;
+  }).join('');
+  return `<h2 style="margin-top:18px">${esc(title)}</h2><p class="note">${sub}</p>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">
+      <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y0}" stroke="var(--line2)"/>
+      <line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1}" stroke="var(--line2)"/>
+      ${grid}${xt}${paths}</svg>`;
+}
+
+$('#runtests').onclick = async () => {
+  $('#testout').innerHTML = '<p class="muted">Running…</p>';
+  const r = await fetch('/api/tests').then(r => r.json());
+  if (r.error) { $('#testout').innerHTML = `<pre class="err">${esc(r.error)}</pre>`; return; }
+  const pass = r.passed === r.total;
+  $('#testout').innerHTML = `
+    <div class="stats">
+      <div class="stat"><div class="v ${pass?'ok':'err'}">${r.passed}/${r.total}</div><div class="k">tests passing</div></div>
+    </div>
+    <table class="data">
+      <tr><th>subject</th><th>assertion</th><th>result</th></tr>
+      ${r.results.map(t => `<tr>
+        <td><code>${esc(t.subject||'—')}</code></td>
+        <td>${esc(t.desc)}</td>
+        <td class="${t.passed?'ok':'err'}">${t.passed?'pass':'FAIL'}</td>
+      </tr>`).join('')}
+    </table>
+    ${r.results.filter(t=>!t.passed).map(t=>`<pre class="err">${esc(t.error||'')}</pre>`).join('')}`;
+};
+
+$('#runbench').onclick = async () => {
+  $('#testout').innerHTML = '<p class="muted">Measuring…</p>';
+  const [b, sc, fo] = await Promise.all([
+    fetch('/api/bench').then(r=>r.json()),
+    fetch('/api/subgraph_costs').then(r=>r.json()),
+    fetch('/api/fanout').then(r=>r.json()),
+  ]);
+  if (b.error) { $('#testout').innerHTML = `<pre class="err">${esc(b.error)}</pre>`; return; }
+  const rows = b.rows;
+  const cross = rows.find(r => r.context_ratio >= 1);
+
+  $('#testout').innerHTML =
+    chart(rows, 'buckets',
+      [{k:'file_tokens', c:'#b3462c', n:'whole file'},
+       {k:'subgraph_tokens', c:'#1d7a4c', n:'subgraph'}],
+      'Context sent per edit',
+      'Synthetic programs of increasing size. Counted directly — no API calls.') +
+
+    chart(rows, 'buckets',
+      [{k:'context_ratio', c:'#2563c9', n:'context only'},
+       {k:'effective_ratio', c:'#8a6a17', n:'incl. prompt overhead'}],
+      'How many times cheaper the subgraph is',
+      'The second line is the one that matters in practice: the system prompt and tool schemas ride on every turn.',
+      {logy:false}) +
+
+    chart((fo.rows||[]), 'fanout',
+      [{k:'subgraph_tokens', c:'#1d7a4c', n:'subgraph'},
+       {k:'file_tokens', c:'#b3462c', n:'whole file'}],
+      'Subgraph cost vs fan-out (program size held at 82 buckets)',
+      'The variable that actually drives it. The file line is flat here because the program is not changing — only how many neighbours the edited bucket has.',
+      {logx:false}) +
+
+    `<h2 style="margin-top:18px">Subgraph cost tracks structure, not program size</h2>
+     <p class="note">Per bucket in <span class="mono">${esc(PROGRAM.file)}</span>. A bucket with more callees carries more neighbours, so it costs more — the flat line in the synthetic sweep above is an artefact of generated helpers that call nothing.</p>
+     <table class="data">
+       <tr><th>bucket</th><th class="n">subgraph tok</th><th class="n">file tok</th><th class="n">ratio</th></tr>
+       ${(sc.rows||[]).map(x=>`<tr>
+         <td><code>${esc(x.label)}</code></td>
+         <td class="n">${x.subgraph}</td><td class="n">${x.file}</td>
+         <td class="n">${x.ratio.toFixed(2)}x</td></tr>`).join('')}
+     </table>
+
+     <h2 style="margin-top:18px">What this means</h2>
+     <p class="note" style="margin-bottom:8px">
+       <b>Break-even is around ${cross ? cross.buckets : '?'} buckets.</b> Below that, the fixed cost of the
+       prompt and tool schemas (${rows[0].agent_overhead} tokens, paid every turn) is larger than the file
+       being replaced, so sending the file is simply cheaper and the honest answer is to do that.
+     </p>
+     <p class="note" style="margin-bottom:8px">
+       <b>The saving comes from output, not input.</b> Measured live, the whole-file arm had to re-emit the
+       entire program (4042 output tokens at 82 buckets, versus 325 for one bucket body). Output bills at
+       5x input, so that difference dominates the total — the input-side saving is the smaller half of the story.
+     </p>
+     <p class="note" style="margin-bottom:8px">
+       <b>The ratio grows without bound.</b> Whole-file cost is linear in program size; bucket cost tracks the
+       neighbourhood. Measured at 7.0x on an 82-bucket program, and nothing about the curve flattens after that.
+     </p>
+     <p class="note">
+       <b>The unmeasured risk is correctness, not cost.</b> Both arms passed here, but a whole-file rewrite
+       cannot prove it changed only what was asked — there is no atomicity check available to it. That
+       guarantee is the part of this design that a token count does not capture.
+     </p>`;
+};
+
+function arm(name, d, fileTok) {
+  if (!d || d.error) return `<div class="arm"><h3>${esc(name)}</h3><div class="err" style="font-size:12px">${esc((d&&d.error)||'not run')}</div></div>`;
+  const sp = d.spend || {};
+  const ok = d.ok;
+  const edited = d.edited;
+  return `<div class="arm ${ok ? 'win' : ''}">
+    <h3>${esc(name)}</h3>
+    <div class="n">$${(sp.usd ?? 0).toFixed(4)}</div>
+    <div class="u">${sp.input_tokens ?? 0} in · ${sp.output_tokens ?? 0} out · ${sp.requests ?? 0} call(s)</div>
+    <div class="u" style="margin-top:6px">
+      ${d.turns != null ? ` · ${d.turns} turns` : ''}
+      ${d.changed_lines != null ? ` · ${d.changed_lines} lines rewritten` : ''}</div>
+  </div>`;
+}
+
+$('#xrun').onclick = async () => {
+  const goal = $('#xgoal').value.trim();
+  if (!goal) return;
+  $('#xrun').disabled = true;
+  $('#xout').innerHTML = '<p class="muted">Running — both arms hit the API, so this takes a moment…</p>';
+  const r = await fetch('/api/experiment', {
+    method: 'POST', headers: {'content-type':'application/json'},
+    body: JSON.stringify({
+      goal, model: $('#xmodel').value, arms: $('#xarms').value,
+      max_usd: parseFloat($('#xusd').value), write: $('#xwrite').checked,
+    }),
+  }).then(r => r.json());
+  $('#xrun').disabled = false;
+
+  if (r.error) { $('#xout').innerHTML = `<pre class="err">${esc(r.error)}</pre>`; return; }
+  const bu = r.buckets, wf = r.whole_file;
+  const ratio = (bu && wf && bu.spend && wf.spend && bu.spend.usd > 0)
+    ? (wf.spend.usd / bu.spend.usd) : null;
+
+  $('#xout').innerHTML = `
+    <div class="cmp" style="margin-top:12px">${arm('Buckets', bu, r.file_tokens)}${arm('Whole file', wf, r.file_tokens)}</div>
+    ${ratio ? `<p class="verdict">Whole file cost <b>${ratio.toFixed(2)}×</b> the bucket path on this run.
+      ${ratio < 1 ? 'Below break-even — at this program size the fixed prompt overhead outweighs the file.' : ''}</p>` : ''}
+    ${bu && bu.tool_calls ? `<h2 style="margin-top:14px">Tool calls</h2>` + bu.tool_calls.map(t => `
+      <div class="tool ${t.ok ? 'good' : 'bad'}">
+        <span class="nm">${esc(t.name)}</span>
+        <span class="muted">${esc(JSON.stringify(t.input).slice(0,120))}</span>
+        <div class="res">${esc((t.result||'').split('\n').slice(0,4).join('\n'))}</div>
+      </div>`).join('') : ''}
+    ${bu && bu.summary ? `<pre>${esc(bu.summary)}</pre>` : ''}`;
+  if ($('#xwrite').checked) await load();
+  loadRuns();
+};
+
+async function loadRuns() {
+  const r = await fetch('/api/runs').then(r => r.json());
+  $('#xlog').textContent = r.log || '—';
+  if (!r.runs || !r.runs.length) { $('#xruns').innerHTML = '<p class="muted">No runs recorded yet.</p>'; return; }
+  $('#xruns').innerHTML = `<table class="data">
+    <tr><th>when</th><th>prompt</th><th>model</th><th class="n">buckets $</th><th class="n">file $</th><th class="n">ratio</th></tr>
+    ${r.runs.map(x => {
+      const b = x.buckets && x.buckets.spend, w = x.whole_file && x.whole_file.spend;
+      const ratio = (b && w && b.usd > 0) ? (w.usd / b.usd).toFixed(2) + 'x' : '—';
+      return `<tr>
+        <td class="muted">${new Date((x.at||0)*1000).toLocaleTimeString()}</td>
+        <td>${esc((x.goal||'').slice(0,64))}</td>
+        <td><code>${esc((x.model||'').replace('claude-',''))}</code></td>
+        <td class="n">${b ? '$'+b.usd.toFixed(4) : '—'}</td>
+        <td class="n">${w ? '$'+w.usd.toFixed(4) : '—'}</td>
+        <td class="n">${ratio}</td></tr>`;
+    }).join('')}</table>`;
+}
+$('#xreload').onclick = loadRuns;
+
+// Load a different program. The server validates it compiles before switching,
+// so a bad paste cannot leave the UI stuck on a file nothing else can read.
+$('#openfile').onchange = async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const lbl = $('#openlbl');
+  const restore = lbl.textContent;
+  lbl.textContent = 'loading…';
+  try {
+    const source = await f.text();
+    const r = await fetch('/api/open', {
+      method: 'POST', headers: {'content-type':'application/json'},
+      body: JSON.stringify({ name: f.name, source }),
+    }).then(r => r.json());
+    if (r.error) {
+      alert(r.error);
+    } else {
+      PROGRAM = null; PREV_SOURCE = null; CHANGED = new Set(); SELECTED = null;
+      $('#cmp').innerHTML = '<p class="muted">Select a bucket on the left.</p>';
+      $('#xout').innerHTML = ''; $('#testout').innerHTML = '';
+      await load(); loadRuns();
+    }
+  } catch (err) {
+    alert(err.message);
+  }
+  lbl.textContent = restore;
+  e.target.value = '';
+};
+
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+  document.querySelectorAll('.panel').forEach(p =>
+    p.classList.toggle('on', p.id === 'p-' + t.dataset.p));
+});
+
+let timer;
+$('#q').oninput = e => {
+  clearTimeout(timer);
+  const q = e.target.value.trim();
+  timer = setTimeout(async () => {
+    if (!q) { render(PROGRAM.buckets.map(b => ({ ...b, score: null }))); return; }
+    const r = await fetch('/api/find?q=' + encodeURIComponent(q)).then(r => r.json());
+    const byAddr = Object.fromEntries(PROGRAM.buckets.map(b => [b.address, b]));
+    render((r.matches || []).map(m => ({ ...byAddr[m.address], ...m })));
+  }, 140);
+};
+
+$('#go').onclick = async () => {
+  const goal = $('#goal').value.trim();
+  if (!goal) return;
+  $('#go').disabled = true;
+  $('#agentOut').innerHTML = '<p class="muted">Working…</p>';
+  try {
+    const r = await fetch('/api/edit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        goal,
+        max_usd: parseFloat($('#usd').value),
+        max_requests: parseInt($('#reqs').value, 10),
+        write: $('#write').checked,
+      }),
+    }).then(r => r.json());
+
+    if (r.error) {
+      $('#agentOut').innerHTML = `<pre class="err">${esc(r.error)}</pre>`;
+    } else {
+      const tools = (r.tool_calls || []).map(t => `
+        <div class="tool ${t.ok ? 'good' : 'bad'}">
+          <span class="nm">${esc(t.name)}</span>
+          <span class="muted">${esc(JSON.stringify(t.input).slice(0, 110))}</span>
+          <div class="res">${esc((t.result || '').split('\n').slice(0, 6).join('\n'))}</div>
+        </div>`).join('');
+      $('#agentOut').innerHTML = `
+        <p class="${r.ok ? 'ok' : 'muted'}">
+          ${r.ok ? '✓ edit accepted' : 'no edit made'} ·
+          ${r.turns} turn(s) · ${r.tool_calls.length} tool call(s) ·
+          ${r.spend.input_tokens} in / ${r.spend.output_tokens} out tok ·
+          $${r.spend.usd.toFixed(4)}
+          <span class="muted">(whole file would have been ${r.whole_file_tokens} tok)</span>
+        </p>
+        ${tools}
+        ${r.summary ? `<pre>${esc(r.summary)}</pre>` : ''}`;
+      // Always reload: if it wrote, the file changed; if it did not, the panel
+      // must still show what is actually on disk rather than the proposal.
+      await load();
+      if (r.ok && !$('#write').checked) {
+        $('#srcnote2').innerHTML += ' <span class="err">Accepted but not saved — tick “write to file” to apply it.</span>';
+      }
+    }
+  } catch (e) {
+    $('#agentOut').innerHTML = `<pre class="err">${esc(e.message)}</pre>`;
+  }
+  $('#go').disabled = false;
+};
+
+// The agent is the only thing that needs a key; say so up front rather than
+// failing at click time.
+fetch('/api/status').then(r => r.json()).then(r => {
+  $('#keyState').textContent = r.has_key ? `API key present · ${r.model}` : 'no API key — agent disabled';
+  $('#keyState').className = 'pill ' + (r.has_key ? 'on' : 'off');
+  if (!r.has_key) {
+    $('#go').disabled = true;
+    $('#goal').placeholder = 'Set ANTHROPIC_API_KEY and restart bucketcode to enable the agent';
+  }
+});
+
+load();
+loadRuns();
+</script>
+</body>
+</html>

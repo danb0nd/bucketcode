@@ -125,6 +125,39 @@ pub fn tools() -> Vec<Tool> {
             }),
         },
         Tool {
+            name: "add_bucket".into(),
+            description: "Create a new bucket. Give it a label, typed parameters, a return type, an English \
+                          description, and a body. Checked before it is accepted: the program must still \
+                          compile, no existing bucket may change, and every test must still pass. Use this \
+                          when the task needs behaviour that does not exist yet — do not try to add one with \
+                          write_file."
+                .into(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string", "description": "Name, e.g. quadruple. Must not already exist."},
+                    "params": {
+                        "type": "array",
+                        "description": "Parameters in order. Empty for none.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "type": {"type": "string", "description": "Num, Bool, Str, List[Num], or a declared type"}
+                            },
+                            "required": ["name", "type"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "returns": {"type": "string", "description": "Return type, e.g. Num."},
+                    "description": {"type": "string", "description": "What it does, in plain English, phrased the way someone would ask for it."},
+                    "body": {"type": "string", "description": "The body expression only — no label, contract, description, or braces."}
+                },
+                "required": ["label", "params", "returns", "description", "body"],
+                "additionalProperties": false
+            }),
+        },
+        Tool {
             name: "bucket_graph".into(),
             description: "Show the call graph: which buckets call which. Use it to see what a change would \
                           affect before making it, or to find your way around an unfamiliar program. \
@@ -255,10 +288,11 @@ neighbours.
 
 # Limits
 
-You can change a bucket's body and description. You **cannot** add or remove
-buckets, or change a `@test` annotation or a contract — there is no tool for
-those. If a task needs one of them, say so plainly and stop; do not try to
-reach it through `write_file`, which bypasses every check and will not help.
+You can change a bucket's body and description with `edit_bucket`, and create a
+new one with `add_bucket`. You **cannot** delete a bucket, change an existing
+bucket's contract, or change a `@test` annotation — there is no tool for those.
+If a task needs one of them, say so plainly and stop; do not try to reach it
+through `write_file`, which bypasses every check and will not help.
 
 A task may turn out to need no change at all. If the code already does what was
 asked, say so and stop. That is a correct outcome, not a failure.
@@ -430,6 +464,120 @@ fn dispatch(ws: &mut Workspace, call: &ToolCall) -> (String, bool) {
                     true,
                 ),
             }
+        }
+
+        "add_bucket" => {
+            let label = call.input.get("label").and_then(|v| v.as_str()).unwrap_or("").trim();
+            let returns = call.input.get("returns").and_then(|v| v.as_str()).unwrap_or("Num");
+            let desc = call.input.get("description").and_then(|v| v.as_str()).unwrap_or("");
+            let body = call.input.get("body").and_then(|v| v.as_str()).unwrap_or("");
+
+            if label.is_empty() {
+                return ("label is required".into(), true);
+            }
+            if desc.trim().is_empty() {
+                return (
+                    "a description is required — it is how this bucket is found and how it is \
+                     summarised to other buckets"
+                        .into(),
+                    true,
+                );
+            }
+            if reg.resolve_target(label).is_some() {
+                return (
+                    format!("a bucket named {label} already exists; use edit_bucket to change it"),
+                    true,
+                );
+            }
+
+            let params = call
+                .input
+                .get("params")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|p| {
+                            Some(format!(
+                                "{}: {}",
+                                p.get("name")?.as_str()?,
+                                p.get("type")?.as_str()?
+                            ))
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default();
+
+            // Append, indenting the body the way the rest of the file is written.
+            let indented = body
+                .trim()
+                .lines()
+                .map(|l| format!("  {}", l.trim_end()))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let added = format!(
+                "\n{label}({params}) -> {returns} \"{}\" {{\n{indented}\n}}\n",
+                desc.replace('"', "'")
+            );
+            let candidate = format!("{}{}", ws.source.trim_end(), format!("\n{added}"));
+
+            let before = user_hashes(reg);
+            let recompiled = match compile_with_base(&candidate, opts(), Path::new(&ws.file)) {
+                Ok(c) => c,
+                Err(e) => {
+                    return (
+                        e.with_source(&candidate, None).render(Some(&candidate)),
+                        true,
+                    )
+                }
+            };
+            let after = user_hashes(&recompiled.registry);
+
+            // Same atomicity idea as an edit, adjusted for the one legitimate
+            // difference: exactly one bucket may appear, and nothing else may
+            // change. Reusing the edit oracle unchanged would reject every add.
+            let appeared: Vec<&String> = after.keys().filter(|k| !before.contains_key(*k)).collect();
+            let changed: Vec<&String> = before
+                .iter()
+                .filter(|(k, v)| after.get(*k) != Some(v))
+                .map(|(k, _)| k)
+                .collect();
+            if appeared.len() != 1 || !changed.is_empty() {
+                return (
+                    format!(
+                        "adding {label} was not clean: {} bucket(s) appeared and {} existing bucket(s) \
+                         changed. Write only the body expression and do not close a brace you did not open.",
+                        appeared.len(),
+                        changed.len()
+                    ),
+                    true,
+                );
+            }
+
+            // Every test, not just this bucket's — a new bucket has none of its own.
+            let mut out = Vec::new();
+            for tid in &recompiled.registry.test_ids {
+                let tb = recompiled.registry.get(tid).unwrap();
+                let r = eval_bucket(&recompiled.registry, tid, &[], &mut out);
+                let ok = if tb.expect_error { r.is_err() } else { r.is_ok() };
+                if !ok {
+                    return (
+                        format!(
+                            "adding {label} broke an existing test ({}）",
+                            tb.subject.clone().unwrap_or_else(|| tid.clone())
+                        ),
+                        true,
+                    );
+                }
+            }
+
+            let addr = appeared[0].clone();
+            ws.source = candidate;
+            ws.dirty = true;
+            (
+                format!("added {label} as {addr}. All {} test(s) still pass.", recompiled.registry.test_ids.len()),
+                false,
+            )
         }
 
         "bucket_graph" => {

@@ -142,7 +142,39 @@ it.
 So the honest framing is: **below break-even you are trading a correctness
 guarantee for a small cost saving**, not choosing between equivalent options.
 
-## 8. Known problems
+## 8. Capability gaps found by running it
+
+A batch of five prompts exposed three problems, only one of which was a real
+failure of the approach.
+
+**Two "failures" were correct behaviour, mis-scored.** Asked to *"round the
+checkout total down to whole cents"*, the model checked, found `cents` already
+did exactly that, and declined to change anything. The `ok` flag conflated *made
+an edit* with *succeeded*, so that scored as a failure — while the whole-file arm
+scored as a success on the same task by echoing the file back unchanged. Now
+split into `ok` and `edited`. Any comparison run before this fix understated the
+bucket path.
+
+**No tool to create a bucket.** Asked to add a `quad` bucket, the model tried
+`edit_bucket` on a name that did not exist, then on a guessed address
+`#b00000003`, then on `b00000003`, then fell through to `read_file(".")` and
+`run_command`. Every one refused, and it burned a whole run discovering it had
+no way to do the task. Fixed by adding `add_bucket`, with an atomicity gate
+adapted for the one legitimate difference: exactly one bucket may appear and no
+existing one may change. Reusing the edit oracle unchanged would have rejected
+every add.
+
+The same run showed the cost of a missing capability is not one failed call but
+an entire wasted trajectory — the model kept trying adjacent tools rather than
+stopping. The system prompt now states plainly what it cannot do.
+
+**Still missing:** deleting a bucket, changing a contract, and editing a `@test`
+annotation. That last one blocks any behaviour change with a test pinning the
+old behaviour — asked to change a tax rate from 8% to 20%, the model correctly
+produced the new body and was rejected by `@test with_tax(100) == 108`, with no
+way to update it.
+
+## 9. Known problems
 
 **`list_buckets` is O(program).** It returns every bucket — 1,643 tokens at 82
 buckets — and stays in conversation history for every later turn. When a model
@@ -162,7 +194,7 @@ to show direction, not enough for confidence intervals.
 **Untested at scale.** Nothing here has run against a program of hundreds of
 buckets written by a person rather than a generator.
 
-## 9. What I would do next
+## 10. What I would do next
 
 1. **Cap `list_buckets`** — it is the one measured thing breaking the core
    property.

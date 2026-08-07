@@ -1,0 +1,13 @@
+@test triple(3) == 9
+triple(x: Num) -> Num "multiply by 3" {
+  x * 3
+}
+
+@entry
+main() -> Num "print triple(5)" {
+  print(triple(5))
+}
+
+quad(x: Num) -> Num "multiply by 4" {
+  x * 4
+}

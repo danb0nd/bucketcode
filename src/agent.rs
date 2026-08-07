@@ -125,6 +125,109 @@ pub fn tools() -> Vec<Tool> {
             }),
         },
         Tool {
+            name: "patch_bucket".into(),
+            description: "Change part of a bucket's body by replacing an exact snippet, leaving the rest \
+                          untouched. PREFER THIS over edit_bucket whenever the body is more than a line or \
+                          two: you emit only the fragment that changes instead of retyping the whole body, \
+                          and output tokens are the most expensive thing you spend. `find` must appear \
+                          exactly once in the body. Same checks as edit_bucket."
+                .into(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "address": {"type": "string", "description": "Address or label of the bucket."},
+                    "find": {"type": "string", "description": "Exact snippet to replace. Must occur exactly once in the body."},
+                    "replace": {"type": "string", "description": "What to put in its place."},
+                    "description": {"type": "string", "description": "Optional. Update it when the behaviour changed."},
+                    "tests": {
+                        "type": "array",
+                        "description": "Optional. New @test set, applied in the SAME change as the body. Use this whenever an existing test pins the behaviour you are changing — updating the test separately cannot work, because either order fails.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "call": {"type": "string"},
+                                "expects": {"type": "string"},
+                                "expect_error": {"type": "boolean"}
+                            },
+                            "required": ["call"],
+                            "additionalProperties": false
+                        }
+                    }
+                },
+                "required": ["address", "find", "replace"],
+                "additionalProperties": false
+            }),
+        },
+        Tool {
+            name: "delete_bucket".into(),
+            description: "Remove a bucket. Refused if anything still calls it — fix the callers first. \
+                          The program must still compile and every test must still pass."
+                .into(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {"address": {"type": "string"}},
+                "required": ["address"],
+                "additionalProperties": false
+            }),
+        },
+        Tool {
+            name: "set_signature".into(),
+            description: "Rename a bucket and/or change its parameters and return type. Call sites are NOT \
+                          rewritten for you, so change them in the same session or the program will not \
+                          compile and the change will be refused."
+                .into(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "address": {"type": "string"},
+                    "label": {"type": "string", "description": "New name. Omit to keep the current one."},
+                    "params": {
+                        "type": "array",
+                        "description": "Full replacement parameter list. Omit to keep the current one.",
+                        "items": {
+                            "type": "object",
+                            "properties": {"name": {"type": "string"}, "type": {"type": "string"}},
+                            "required": ["name", "type"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "returns": {"type": "string", "description": "New return type. Omit to keep the current one."}
+                },
+                "required": ["address"],
+                "additionalProperties": false
+            }),
+        },
+        Tool {
+            name: "set_tests".into(),
+            description: "Replace every @test on a bucket at once. This is how you change a test that pins \
+                          old behaviour — give the full list you want the bucket to end up with, or an empty \
+                          list to remove them all. Each entry is either an expected value or an expected \
+                          error. The new tests must pass."
+                .into(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "address": {"type": "string"},
+                    "tests": {
+                        "type": "array",
+                        "description": "The complete set of tests this bucket should have.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "call": {"type": "string", "description": "The call, e.g. double(3)"},
+                                "expects": {"type": "string", "description": "Expected value, e.g. 6. Omit when expect_error is true."},
+                                "expect_error": {"type": "boolean", "description": "True if the call should fail."}
+                            },
+                            "required": ["call"],
+                            "additionalProperties": false
+                        }
+                    }
+                },
+                "required": ["address", "tests"],
+                "additionalProperties": false
+            }),
+        },
+        Tool {
             name: "add_bucket".into(),
             description: "Create a new bucket. Give it a label, typed parameters, a return type, an English \
                           description, and a body. Checked before it is accepted: the program must still \
@@ -288,11 +391,25 @@ neighbours.
 
 # Limits
 
-You can change a bucket's body and description with `edit_bucket`, and create a
-new one with `add_bucket`. You **cannot** delete a bucket, change an existing
-bucket's contract, or change a `@test` annotation — there is no tool for those.
-If a task needs one of them, say so plainly and stop; do not try to reach it
-through `write_file`, which bypasses every check and will not help.
+You can do all of this:
+
+- `patch_bucket` — change part of a body. **Prefer this** whenever the body is
+  more than a line or two: you emit only the fragment that changes, and output
+  tokens cost five times what input does.
+- `edit_bucket` — replace a whole body and description. For short bodies.
+- `add_bucket` / `delete_bucket` — create or remove one.
+- `set_signature` — rename, or change parameters and return type. Call sites are
+  not rewritten for you; fix them in the same session.
+- `set_tests` — replace a bucket's `@test` lines on their own.
+
+When a change to behaviour is pinned by an existing test, change both **in one
+call**: pass `tests` to `patch_bucket` alongside `find`/`replace`. Doing it in
+two steps cannot work — new tests fail against the old body, and the old test
+fails against the new body.
+
+You cannot add or remove type aliases, modules, or imports. If a task needs one,
+say so plainly and stop; do not reach for `write_file`, which bypasses every
+check and will not help.
 
 A task may turn out to need no change at all. If the code already does what was
 asked, say so and stop. That is a correct outcome, not a failure.
@@ -369,7 +486,22 @@ fn dispatch(ws: &mut Workspace, call: &ToolCall) -> (String, bool) {
         "read_bucket" => {
             let addr = call.input.get("address").and_then(|v| v.as_str()).unwrap_or("");
             match crate::context::build_context(reg, addr, 1) {
-                Ok(pack) => (pack.render(), false),
+                Ok(mut pack) => {
+                    // Show the body as it is written in the file, not as the
+                    // AST renders it. The renderer adds parentheses -- source
+                    // `p * 1.08` prints as `(p * 1.08)` -- so a model patching
+                    // against what it was shown would never match.
+                    if let Some(span) = reg
+                        .resolve_target(addr.trim())
+                        .and_then(|a| reg.get(&a))
+                        .and_then(|b| b.body_span)
+                    {
+                        if let Some(src) = ws.source.get(span.start..span.end) {
+                            pack.target.body_labelled = src.trim_end().to_string();
+                        }
+                    }
+                    (pack.render(), false)
+                }
                 Err(e) => (format!("{e}"), true),
             }
         }
@@ -463,6 +595,324 @@ fn dispatch(ws: &mut Workspace, call: &ToolCall) -> (String, bool) {
                     e.with_source(&spliced, None).render(Some(&spliced)),
                     true,
                 ),
+            }
+        }
+
+        // Surgical body edit: emit only the fragment that changes.
+        "patch_bucket" => {
+            let addr = call.input.get("address").and_then(|v| v.as_str()).unwrap_or("");
+            let find = call.input.get("find").and_then(|v| v.as_str()).unwrap_or("");
+            let replace = call.input.get("replace").and_then(|v| v.as_str()).unwrap_or("");
+            let desc = call.input.get("description").and_then(|v| v.as_str());
+            if find.is_empty() {
+                return ("`find` cannot be empty".into(), true);
+            }
+
+            let Some(resolved) = reg.resolve_target(addr.trim()) else {
+                return (format!("unknown bucket {addr}"), true);
+            };
+            let Some(span) = reg.get(&resolved).and_then(|b| b.body_span) else {
+                return (
+                    format!("{addr} has no editable body here (it may be a core or an import)"),
+                    true,
+                );
+            };
+            let body = &ws.source[span.start..span.end];
+
+            // Ambiguity is an error, not a coin flip: replacing "the first one"
+            // is how a patch silently changes the wrong thing.
+            let hits = body.matches(find).count();
+            if hits == 0 {
+                return (
+                    format!(
+                        "`find` does not appear in the body of {addr}. The body, exactly as written:\n\
+                         ---\n{}\n---",
+                        body.trim()
+                    ),
+                    true,
+                );
+            }
+            if hits > 1 {
+                return (
+                    format!(
+                        "`find` appears {hits} times in {addr}; include enough surrounding text to make \
+                         it unique. The body is:\n{}",
+                        body.trim()
+                    ),
+                    true,
+                );
+            }
+
+            let new_body = body.replacen(find, replace, 1);
+            let candidate = format!(
+                "{}{}{}",
+                &ws.source[..span.start],
+                new_body,
+                &ws.source[span.end..]
+            );
+            let candidate = match desc {
+                Some(d) => replace_description(&candidate, reg, addr, d).unwrap_or(candidate),
+                None => candidate,
+            };
+
+            // If new tests were supplied, rewrite the declaration so body and
+            // tests land in one change. Applying them separately deadlocks.
+            let candidate = match call.input.get("tests") {
+                Some(t) => {
+                    let lines = match render_tests(t) {
+                        Ok(l) => l,
+                        Err(e) => return (e, true),
+                    };
+                    let b = reg.get(&resolved).unwrap();
+                    let keep_entry = decl_annotations(&ws.source, reg, addr)
+                        .iter()
+                        .any(|a| a.trim().starts_with("@entry"));
+                    let params = b
+                        .contract
+                        .params
+                        .iter()
+                        .map(|p| format!("{}: {}", p.name, p.ty.name()))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let mut decl = String::new();
+                    for l in &lines {
+                        decl.push_str(l);
+                        decl.push('\n');
+                    }
+                    if keep_entry {
+                        decl.push_str("@entry\n");
+                    }
+                    decl.push_str(&format!(
+                        "{}({params}) -> {} \"{}\" {{{}\n}}",
+                        b.label.clone().unwrap_or_else(|| resolved.clone()),
+                        b.contract.ret.name(),
+                        desc.unwrap_or(&b.desc).replace('"', "'"),
+                        new_body.trim_end()
+                    ));
+                    match splice_decl(&candidate, reg, addr, Some(&decl)) {
+                        Ok(c) => c,
+                        Err(e) => return (e, true),
+                    }
+                }
+                None => candidate,
+            };
+
+            let before = user_hashes(reg);
+            match check_change(ws, &candidate, &before, 0, 0, &[resolved.clone()]) {
+                Ok(c) => {
+                    ws.source = candidate;
+                    ws.dirty = true;
+                    (
+                        format!(
+                            "patched {addr}. {} test(s) pass.",
+                            c.registry.test_ids.len()
+                        ),
+                        false,
+                    )
+                }
+                Err(e) => (e, true),
+            }
+        }
+
+        "delete_bucket" => {
+            let addr = call.input.get("address").and_then(|v| v.as_str()).unwrap_or("");
+            let Some(resolved) = reg.resolve_target(addr.trim()) else {
+                return (format!("unknown bucket {addr}"), true);
+            };
+
+            // Refuse while anything still calls it, so the failure names the
+            // callers instead of surfacing as a confusing compile error.
+            let g = bucketlang::graph::build_graph(reg);
+            if let Some(node) = g.get(&resolved) {
+                let callers: Vec<String> = node
+                    .inn
+                    .iter()
+                    .filter(|c| *c != &resolved)
+                    .filter_map(|c| reg.get(c).map(|b| b.label.clone().unwrap_or_else(|| c.clone())))
+                    .collect();
+                if !callers.is_empty() {
+                    return (
+                        format!(
+                            "{addr} is still called by {}. Change those first.",
+                            callers.join(", ")
+                        ),
+                        true,
+                    );
+                }
+            }
+
+            let candidate = match splice_decl(&ws.source, reg, addr, None) {
+                Ok(c) => c,
+                Err(e) => return (e, true),
+            };
+            let before = user_hashes(reg);
+            match check_change(ws, &candidate, &before, 0, 1, &[]) {
+                Ok(_) => {
+                    ws.source = candidate;
+                    ws.dirty = true;
+                    (format!("deleted {addr}."), false)
+                }
+                Err(e) => (e, true),
+            }
+        }
+
+        "set_signature" => {
+            let addr = call.input.get("address").and_then(|v| v.as_str()).unwrap_or("");
+            let Some(resolved) = reg.resolve_target(addr.trim()) else {
+                return (format!("unknown bucket {addr}"), true);
+            };
+            let Some(b) = reg.get(&resolved) else {
+                return (format!("unknown bucket {addr}"), true);
+            };
+
+            let label = call
+                .input
+                .get("label")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim().to_string())
+                .unwrap_or_else(|| b.label.clone().unwrap_or_else(|| resolved.clone()));
+            let returns = call
+                .input
+                .get("returns")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| b.contract.ret.name());
+            let params = match call.input.get("params").and_then(|v| v.as_array()) {
+                Some(a) => a
+                    .iter()
+                    .filter_map(|p| {
+                        Some(format!(
+                            "{}: {}",
+                            p.get("name")?.as_str()?,
+                            p.get("type")?.as_str()?
+                        ))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                None => b
+                    .contract
+                    .params
+                    .iter()
+                    .map(|p| format!("{}: {}", p.name, p.ty.name()))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            };
+
+            let Some(span) = b.body_span else {
+                return (format!("{addr} has no editable declaration here"), true);
+            };
+            let body = ws.source[span.start..span.end].trim_end().to_string();
+            let annotations = decl_annotations(&ws.source, reg, addr);
+            let mut decl = String::new();
+            for a in &annotations {
+                decl.push_str(a);
+                decl.push('\n');
+            }
+            decl.push_str(&format!(
+                "{label}({params}) -> {returns} \"{}\" {{{body}\n}}",
+                b.desc.replace('"', "'")
+            ));
+
+            let candidate = match splice_decl(&ws.source, reg, addr, Some(&decl)) {
+                Ok(c) => c,
+                Err(e) => return (e, true),
+            };
+            let before = user_hashes(reg);
+            // Renaming changes the label, not the address, so the bucket's own
+            // hash may move but nothing should appear or vanish.
+            match check_change(ws, &candidate, &before, 0, 0, &[resolved.clone()]) {
+                Ok(_) => {
+                    ws.source = candidate;
+                    ws.dirty = true;
+                    (format!("{addr} is now {label}({params}) -> {returns}."), false)
+                }
+                Err(e) => (e, true),
+            }
+        }
+
+        "set_tests" => {
+            let addr = call.input.get("address").and_then(|v| v.as_str()).unwrap_or("");
+            let Some(resolved) = reg.resolve_target(addr.trim()) else {
+                return (format!("unknown bucket {addr}"), true);
+            };
+
+            let mut lines = Vec::new();
+            for t in call
+                .input
+                .get("tests")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default()
+            {
+                let c = t.get("call").and_then(|v| v.as_str()).unwrap_or("").trim();
+                if c.is_empty() {
+                    continue;
+                }
+                if t.get("expect_error").and_then(|v| v.as_bool()) == Some(true) {
+                    lines.push(format!("@test_error {c}"));
+                } else {
+                    let e = t.get("expects").and_then(|v| v.as_str()).unwrap_or("").trim();
+                    if e.is_empty() {
+                        return (
+                            format!("test `{c}` needs `expects`, or `expect_error: true`"),
+                            true,
+                        );
+                    }
+                    lines.push(format!("@test {c} == {e}"));
+                }
+            }
+
+            // Keep @entry if it was there; only the @test lines are replaced.
+            let keep_entry = decl_annotations(&ws.source, reg, addr)
+                .iter()
+                .any(|a| a.trim().starts_with("@entry"));
+            let Some(span) = reg.get(&resolved).and_then(|b| b.body_span) else {
+                return (format!("{addr} has no editable declaration here"), true);
+            };
+            let b = reg.get(&resolved).unwrap();
+            let body = ws.source[span.start..span.end].trim_end().to_string();
+            let params = b
+                .contract
+                .params
+                .iter()
+                .map(|p| format!("{}: {}", p.name, p.ty.name()))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let mut decl = String::new();
+            for l in &lines {
+                decl.push_str(l);
+                decl.push('\n');
+            }
+            if keep_entry {
+                decl.push_str("@entry\n");
+            }
+            decl.push_str(&format!(
+                "{}({params}) -> {} \"{}\" {{{body}\n}}",
+                b.label.clone().unwrap_or_else(|| resolved.clone()),
+                b.contract.ret.name(),
+                b.desc.replace('"', "'")
+            ));
+
+            let candidate = match splice_decl(&ws.source, reg, addr, Some(&decl)) {
+                Ok(c) => c,
+                Err(e) => return (e, true),
+            };
+            let before = user_hashes(reg);
+            match check_change(ws, &candidate, &before, 0, 0, &[resolved.clone()]) {
+                Ok(c) => {
+                    ws.source = candidate;
+                    ws.dirty = true;
+                    (
+                        format!(
+                            "{addr} now has {} test(s); all {} test(s) in the program pass.",
+                            lines.len(),
+                            c.registry.test_ids.len()
+                        ),
+                        false,
+                    )
+                }
+                Err(e) => (e, true),
             }
         }
 
@@ -917,4 +1367,164 @@ pub struct BaselineRun {
     pub spend: crate::budget::Spend,
     /// Lines that differ from the original — the blast radius of a whole-file rewrite.
     pub changed_lines: usize,
+}
+
+// ---------------------------------------------------------------------------
+// Source-level surgery on a whole bucket declaration.
+// ---------------------------------------------------------------------------
+
+/// Byte range covering a bucket's entire declaration: any `@test` / `@entry`
+/// lines above it, the signature line, and the body through its closing brace.
+///
+/// The language records a span for the *body* only, which is all a body edit
+/// needs. Renaming, changing a contract, or deleting requires the whole
+/// declaration, and it is derived here rather than by searching for the label —
+/// searching text is exactly the bug the span work was done to remove.
+fn decl_range(source: &str, reg: &Registry, target: &str) -> Option<(usize, usize)> {
+    let addr = reg.resolve_target(target.trim())?;
+    let span = reg.get(&addr)?.body_span?;
+
+    // End: the closing brace after the body.
+    let end = source[span.end..]
+        .find('}')
+        .map(|i| span.end + i + 1)
+        .unwrap_or(span.end);
+
+    // Start: walk back to the beginning of the signature line, then keep
+    // walking while the lines above are annotations belonging to this bucket.
+    let mut start = source[..span.start].rfind('\n').map(|i| i + 1).unwrap_or(0);
+    loop {
+        let prev_end = match start.checked_sub(1) {
+            Some(0) | None => break,
+            Some(i) => i,
+        };
+        let prev_start = source[..prev_end].rfind('\n').map(|i| i + 1).unwrap_or(0);
+        let line = source[prev_start..prev_end].trim();
+        if line.starts_with("@test") || line.starts_with("@entry") {
+            start = prev_start;
+        } else {
+            break;
+        }
+    }
+    Some((start, end))
+}
+
+/// The `@test` / `@entry` annotation lines attached to a bucket.
+fn decl_annotations(source: &str, reg: &Registry, target: &str) -> Vec<String> {
+    let Some((start, _)) = decl_range(source, reg, target) else {
+        return Vec::new();
+    };
+    source[start..]
+        .lines()
+        .take_while(|l| {
+            let t = l.trim();
+            t.starts_with("@test") || t.starts_with("@entry")
+        })
+        .map(|l| l.to_string())
+        .collect()
+}
+
+/// Render `@test` lines from the tool's test spec.
+fn render_tests(tests: &serde_json::Value) -> Result<Vec<String>, String> {
+    let mut lines = Vec::new();
+    for t in tests.as_array().cloned().unwrap_or_default() {
+        let c = t.get("call").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+        if c.is_empty() {
+            continue;
+        }
+        if t.get("expect_error").and_then(|v| v.as_bool()) == Some(true) {
+            lines.push(format!("@test_error {c}"));
+        } else {
+            let e = t.get("expects").and_then(|v| v.as_str()).unwrap_or("").trim();
+            if e.is_empty() {
+                return Err(format!("test `{c}` needs `expects`, or `expect_error: true`"));
+            }
+            lines.push(format!("@test {c} == {e}"));
+        }
+    }
+    Ok(lines)
+}
+
+/// Replace a whole declaration, or delete it when `replacement` is `None`.
+fn splice_decl(
+    source: &str,
+    reg: &Registry,
+    target: &str,
+    replacement: Option<&str>,
+) -> Result<String, String> {
+    let (start, end) = decl_range(source, reg, target)
+        .ok_or_else(|| format!("cannot locate the declaration of {target}"))?;
+    let mut out = String::with_capacity(source.len());
+    out.push_str(&source[..start]);
+    match replacement {
+        Some(text) => out.push_str(text),
+        None => {
+            // Also swallow the blank line the declaration left behind.
+            let rest = source[end..].trim_start_matches('\n');
+            out.push_str(rest);
+            return Ok(out);
+        }
+    }
+    out.push_str(&source[end..]);
+    Ok(out)
+}
+
+/// Compile a candidate source and check what changed against `before`.
+///
+/// `allow_appear` / `allow_vanish` describe the change the caller intends; any
+/// other movement is collateral and rejects. This generalises the single-bucket
+/// atomicity oracle so add, delete, and rename each get a gate shaped to them
+/// rather than sharing one that fits none of them.
+fn check_change(
+    ws: &Workspace,
+    candidate: &str,
+    before: &std::collections::BTreeMap<String, String>,
+    allow_appear: usize,
+    allow_vanish: usize,
+    allow_change: &[String],
+) -> Result<bucketlang::CompileResult, String> {
+    let recompiled = compile_with_base(candidate, opts(), Path::new(&ws.file))
+        .map_err(|e| e.with_source(candidate, None).render(Some(candidate)))?;
+    let after = user_hashes(&recompiled.registry);
+
+    let appeared = after.keys().filter(|k| !before.contains_key(*k)).count();
+    let vanished = before.keys().filter(|k| !after.contains_key(*k)).count();
+    let changed: Vec<&String> = before
+        .iter()
+        .filter(|(k, v)| after.get(*k).is_some_and(|n| n != *v))
+        .map(|(k, _)| k)
+        .filter(|k| !allow_change.contains(k))
+        .collect();
+
+    if appeared != allow_appear || vanished != allow_vanish || !changed.is_empty() {
+        return Err(format!(
+            "that was not a clean change: {appeared} bucket(s) appeared (expected {allow_appear}), \
+             {vanished} vanished (expected {allow_vanish}), and {} other bucket(s) changed. \
+             Write only what was asked and do not close a brace you did not open.",
+            changed.len()
+        ));
+    }
+
+    // Every test must still pass — a structural change can break a distant one.
+    let mut out = Vec::new();
+    for tid in &recompiled.registry.test_ids {
+        let tb = recompiled.registry.get(tid).unwrap();
+        let r = eval_bucket(&recompiled.registry, tid, &[], &mut out);
+        let ok = if tb.expect_error { r.is_err() } else { r.is_ok() };
+        if !ok {
+            let subject = tb.subject.clone().unwrap_or_else(|| tid.clone());
+            // Say what to do about it. A bare "a test broke" leaves the model
+            // guessing, and in practice it gave up rather than reaching for the
+            // tool that fixes exactly this.
+            return Err(format!(
+                "that change broke the test on {subject}: `{}`.\n\n\
+                 If the behaviour was *meant* to change, make the body change and the test change \
+                 together: pass a `tests` array to patch_bucket in the same call. Doing it in two \
+                 steps cannot work -- new tests fail against the old body, and the old test fails \
+                 against the new body. If the behaviour was not meant to change, fix the body instead.",
+                tb.desc
+            ));
+        }
+    }
+    Ok(recompiled)
 }

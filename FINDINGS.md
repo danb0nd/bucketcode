@@ -174,7 +174,44 @@ old behaviour — asked to change a tax rate from 8% to 20%, the model correctly
 produced the new body and was rejected by `@test with_tax(100) == 108`, with no
 way to update it.
 
-## 9. Known problems
+## 9. The tool set must match the unit of change
+
+Adding the missing capabilities exposed something sharper than "a tool was
+missing".
+
+**Tools that split an indivisible change deadlock.** With `patch_bucket` and
+`set_tests` as separate tools, changing a tax rate from 8% to 20% is impossible
+in either order: new tests fail against the old body, and the old test fails
+against the new body. The model eventually found the only path — delete the
+test, patch the body, re-add the test — but it took **11 turns and $0.106**,
+with three rejected attempts first.
+
+Letting `patch_bucket` take a `tests` array so both land in one change:
+**3 tool calls, $0.032.** Same result, a third of the cost.
+
+The lesson generalises: behaviour and the test that pins it are one unit, and a
+tool boundary drawn through the middle of a unit of change is worse than a
+missing tool — a missing tool fails fast, a split one fails three times first.
+
+**Patching beats rewriting, for the same reason whole-file rewriting loses.**
+`patch_bucket` sends only the fragment that changes rather than the whole body.
+It is the same argument as §2 applied one level down: the measured saving is in
+output tokens, and a body is just a smaller file.
+
+**Two bugs the tools surfaced:**
+
+- `read_bucket` returned the *rendered AST* (`(p * 1.08)`) while `patch_bucket`
+  matched against *source text* (`p * 1.08`). Every patch failed. What a model
+  is shown must be exactly what it patches.
+- The turn limit was `--max-attempts`, default 3. Tool use needs turns for
+  reading, editing, and recovering, so multi-step work was truncated before the
+  spend limits ever applied. Renamed `--max-turns`, default 12.
+
+**Actionable errors are worth more than correct ones.** "That change broke a
+test" was accurate and useless — the model gave up. Naming the fix in the error
+text is what got it to recover.
+
+## 10. Known problems
 
 **`list_buckets` is O(program).** It returns every bucket — 1,643 tokens at 82
 buckets — and stays in conversation history for every later turn. When a model
@@ -194,7 +231,7 @@ to show direction, not enough for confidence intervals.
 **Untested at scale.** Nothing here has run against a program of hundreds of
 buckets written by a person rather than a generator.
 
-## 10. What I would do next
+## 11. What I would do next
 
 1. **Cap `list_buckets`** — it is the one measured thing breaking the core
    property.

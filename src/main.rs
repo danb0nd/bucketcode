@@ -70,8 +70,14 @@ enum Commands {
         bucket: Option<String>,
         #[arg(long, default_value = "auto")]
         strategy: String,
-        #[arg(long, default_value_t = 3)]
-        max_attempts: u32,
+        /// How many tool-use turns the agent may take.
+        ///
+        /// Not a retry count: one turn is one model call, and a task that needs
+        /// to read, edit, fix a test, and re-edit needs several. The default was
+        /// 3, which silently truncated multi-step work before the spend limits
+        /// ever came into play.
+        #[arg(long, default_value_t = 12)]
+        max_turns: u32,
         #[arg(long, default_value_t = 1)]
         depth: usize,
         /// Persist the edit if every gate passes.
@@ -199,7 +205,7 @@ fn run() -> Result<(), String> {
             goal,
             bucket,
             strategy: strat,
-            max_attempts,
+            max_turns,
             depth,
             write,
             max_requests,
@@ -274,7 +280,7 @@ fn run() -> Result<(), String> {
                 &file,
                 &src,
                 &goal,
-                max_attempts as usize,
+                max_turns as usize,
                 approval,
             )?;
 

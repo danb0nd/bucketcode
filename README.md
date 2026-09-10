@@ -8,7 +8,7 @@ rewrite. bucketcode gives the model a map of the program — every function's
 address, contract, and one-line English description, with no bodies — and lets
 it pull in only what it decides it needs.
 
-It is built on [bucketlang](../bucketlang_claude_fork), whose functions
+It is built on [bucketlang](https://github.com/danb0nd/bucketlang), whose functions
 ("buckets") separate three things a normal language fuses into one name:
 
 | | who reads it | stable? |
